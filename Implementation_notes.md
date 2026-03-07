@@ -4,9 +4,9 @@ This is where I'll log my notes about what I tried, what worked, what didn't wor
 
 ## Table of Contents
 
-**[Trial 0: Initial Model Implementation](trial-1:-initial-model-implementation)**
+**[Trial 0: Initial Model Implementation](trial-0:-initial-model-implementation)**
 
-**[Trial 1: Simple Performance Upgrades](trial-2:-simple-performance-upgrades)**
+**[Trial 1: Simple Performance Upgrades](trial-1:-simple-performance-upgrades)**
 
 
 ---
@@ -33,13 +33,13 @@ This is where I'll log my notes about what I tried, what worked, what didn't wor
   - False positives were relatively low, which is why specificity and accuracy looked decent.
 
 <p><strong>Trial 0 Model Results:</strong></p>
-<img src="runs/2026-03-05_16.17.20/figures/results_table_2026-03-05_16.17.20.png" alt="Trial 1 Model Results">
+<img src="results/runs/2026-03-05_16.17.20/figures/results_table_2026-03-05_16.17.20.png" alt="Trial 1 Model Results">
 
 <p><strong>Trial 0 Confusion Matrix:</strong></p>
-<img src="runs/2026-03-05_16.17.20/figures/confusion_matrix_2026-03-05_16.17.20.png" alt="Trial 1 Confusion Matrix" width="300">
+<img src="results/runs/2026-03-05_16.17.20/figures/confusion_matrix_2026-03-05_16.17.20.png" alt="Trial 1 Confusion Matrix" width="300">
 
 <p><strong>Trial 0 Training Loss:</strong></p>
-<img src="runs/2026-03-05_16.17.20/figures/train_loss_2026-03-05_16.17.20.png" width="500">
+<img src="results/runs/2026-03-05_16.17.20/figures/train_loss_2026-03-05_16.17.20.png" width="500">
 
 ---
 ## Trial 1: Simple Performance Upgrades
@@ -73,13 +73,13 @@ This trial focused on a few “low effort, high impact” upgrades while keeping
 
 
 <p><strong>Trial 1 Model Results:</strong></p>
-<img src="runs/2026-03-06_11.55.56/figures/results_table_2026-03-06_11.55.56.png" alt="Trial 1 Model Results">
+<img src="results/runs/2026-03-06_11.55.56/figures/results_table_2026-03-06_11.55.56.png" alt="Trial 1 Model Results">
 
 <p><strong>Trial 1 Confusion Matrix:</strong></p>
-<img src="runs/2026-03-06_11.55.56/figures/confusion_matrix_2026-03-06_11.55.56.png" alt="Trial 1 Confusion Matrix" width="300">
+<img src="results/runs/2026-03-06_11.55.56/figures/confusion_matrix_2026-03-06_11.55.56.png" alt="Trial 1 Confusion Matrix" width="300">
 
 <p><strong>Trial 1 Training Loss:</strong></p>
-<img src="runs/2026-03-06_11.55.56/figures/train_loss_2026-03-06_11.55.56.png" width="500">
+<img src="results/uns/2026-03-06_11.55.56/figures/train_loss_2026-03-06_11.55.56.png" width="500">
 
 
 Trial 1 did improve the model, but the improvement showed up more in how well it ranks positives above negatives than accuracy number.
