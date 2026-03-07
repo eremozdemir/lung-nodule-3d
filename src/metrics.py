@@ -23,7 +23,8 @@ def compute_binary_metrics(y_true: np.ndarray, logits: np.ndarray, threshold: fl
     cm = confusion_matrix(y_true, preds)
     tn, fp, fn, tp = cm.ravel()
 
-    sensitivity = float(tp / (tp + fn)) if (tp + fn) > 0 else 0.0
+    recall = float(tp / (tp + fn)) if (tp + fn) > 0 else 0.0
+    precision = float(tp / (tp + fp)) if (tp + fp) > 0 else 0.0
     specificity = float(tn / (tn + fp)) if (tn + fp) > 0 else 0.0
     acc = float((tp + tn) / (tp + tn + fp + fn))
 
@@ -31,7 +32,8 @@ def compute_binary_metrics(y_true: np.ndarray, logits: np.ndarray, threshold: fl
         "auroc": auc,
         "f1": f1,
         "accuracy": acc,
-        "sensitivity": sensitivity,
+        "precision": precision,
+        "recall": recall,
         "specificity": specificity,
         "confusion_matrix": cm.tolist(),
     }
