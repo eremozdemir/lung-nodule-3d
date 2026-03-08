@@ -3,10 +3,16 @@ This is where I'll log my notes about what I tried, what worked, what didn't wor
 
 
 ## Table of Contents
-
-**[Trial 0: Initial Model Implementation](trial-0:-initial-model-implementation)**
-
-**[Trial 1: Simple Performance Upgrades](trial-1:-simple-performance-upgrades)**
+- [Implementation Notes](#implementation-notes)
+  - [Table of Contents](#table-of-contents)
+  - [Trial 0: Initial Model Implementation](#trial-0-initial-model-implementation)
+    - [Trial 0 results summary (thr = 0.50)](#trial-0-results-summary-thr--050)
+    - [Interpretation](#interpretation)
+  - [Trial 1: Simple Performance Upgrades](#trial-1-simple-performance-upgrades)
+    - [Trial 1 results summary (default thr = 0.50)](#trial-1-results-summary-default-thr--050)
+    - [Trial 1 results summary (best thr = 0.65)](#trial-1-results-summary-best-thr--065)
+    - [Interpretation](#interpretation-1)
+  - [What to try next for Trial 2](#what-to-try-next-for-trial-2)
 
 
 ---
@@ -45,13 +51,13 @@ This is where I'll log my notes about what I tried, what worked, what didn't wor
 ## Trial 1: Simple Performance Upgrades
 
 This trial focused on a few “low effort, high impact” upgrades while keeping the project lightweight:
-
 * **Trained longer with learning rate (LR) scheduling**: 
   * Did this so that training can keep improving without manually tuning LR every time
   * The run logs show training continuing out to later epochs while tracking LR as it decays
 * **Validation-based threshold tuning**:
   * instead of assuming 0.50, On the validation sweep, the best F1 occurred at **threshold = 0.65**. 
-* **Re-evaluated test performance at both thresholds**:
+
+### Trial 1 results summary (default thr = 0.50)
   1) With the default **thr = 0.50**, test metrics improved slightly in some areas but got worst in others:
      - **AUROC:** Increased from 0.849 to 0.871, 
      - **F1:** Increase from 0.564 to 0.599,
@@ -59,6 +65,8 @@ This trial focused on a few “low effort, high impact” upgrades while keeping
      - **Precision:** Decreased from 0.623 to 0.505
      - **Specificity:** Decreased from 0.919 to 0.813
      - **Accuracy:** Increased from 0.797 to 0.835
+
+### Trial 1 results summary (best thr = 0.65)
   2) With the **tuned best thr = 0.65**:
      - **AUROC:** Increase from 0.849 to 0.871, (Same as default thr = 0.50)
      - **F1:** Increase from 0.564 to 0.598, (Same as default thr = 0.50)
@@ -81,7 +89,7 @@ This trial focused on a few “low effort, high impact” upgrades while keeping
 <p><strong>Trial 1 Training Loss:</strong></p>
 <img src="results/uns/2026-03-06_11.55.56/figures/train_loss_2026-03-06_11.55.56.png" width="500">
 
-
+### Interpretation
 Trial 1 did improve the model, but the improvement showed up more in how well it ranks positives above negatives than accuracy number.
 
 AUROC improved from 0.849 to 0.871, which means the CNN is separating benign vs malignant volumes more consistently overall, thus better ordering of scores.
