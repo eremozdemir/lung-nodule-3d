@@ -52,23 +52,49 @@ def train_one_epoch(model, loader, optimizer, criterion, device) -> float:
 
 
 @torch.no_grad()
-def evaluate(model, loader, device, threshold: float) -> Dict:
+def evaluate(model, loader, device, threshold: float, criterion=None) -> Dict:
     model.eval()
     all_logits = []
     all_y = []
+    total_loss = 0.0
+    n_batches = 0
 
     for x, y in tqdm(loader, desc="eval", leave=False):
         x = x.to(device, non_blocking=True)
-        logits = model(x).detach().cpu().numpy()
-        all_logits.append(logits)
+        y_dev = y.to(device, non_blocking=True).float().view(-1)
 
-        y_np = y.numpy().reshape(-1)
-        all_y.append(y_np)
+        logits = model(x).detach()
 
-    logits = np.concatenate(all_logits, axis=0)
-    y_true = np.concatenate(all_y, axis=0).astype(int)
+        # Compute val loss if criterion is provided
+        if criterion is not None:
+            loss = criterion(logits, y_dev)
+            total_loss += loss.item()
+            n_batches += 1
 
-    return compute_binary_metrics(y_true, logits, threshold=threshold)
+        all_logits.append(logits.cpu().numpy())
+        all_y.append(y.numpy().reshape(-1))
+
+    logits_np = np.concatenate(all_logits, axis=0)
+    y_true    = np.concatenate(all_y, axis=0).astype(int)
+
+    metrics = compute_binary_metrics(y_true, logits_np, threshold=threshold)
+
+    if criterion is not None and n_batches > 0:
+        metrics["val_loss"] = total_loss / n_batches
+
+    return metrics
+
+@torch.no_grad()
+def evaluate_loss(model, loader, criterion, device) -> float:
+    model.eval()
+    losses = []
+    for x, y in tqdm(loader, desc="eval_loss", leave=False):
+        x = x.to(device, non_blocking=True)
+        y = y.to(device, non_blocking=True).float().view(-1)
+        logits = model(x)
+        loss = criterion(logits, y)
+        losses.append(loss.item())
+    return float(np.mean(losses))
 
 
 def save_json(path: str, obj: Dict):
