@@ -20,6 +20,7 @@ class TrainConfig:
     num_workers: int = 2
     seed: int = 42
     threshold: float = 0.5
+    scheduler_patience: int = 6
 
 
 def set_seed(seed: int):

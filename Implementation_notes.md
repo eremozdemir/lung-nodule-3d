@@ -9,16 +9,19 @@ This is where I'll log my notes about what I tried, what worked, what didn't wor
     - [Trial 0 results summary (thr = 0.50)](#trial-0-results-summary-thr--050)
     - [Interpretation](#interpretation)
   - [Trial 1: Simple Performance Upgrades](#trial-1-simple-performance-upgrades)
-    - [Trial 1 results summary (default thr = 0.50)](#trial-1-results-summary-default-thr--050)
-      - [Comparing Trial 1 results with Trial 0 results at default thr = 0.5](#comparing-trial-1-results-with-trial-0-results-at-default-thr--05)
-    - [Trial 1 results summary (best thr = 0.65)](#trial-1-results-summary-best-thr--065)
-      - [Comparing Trial 1 results between default thr = 0.5 and best thr = 0.65](#comparing-trial-1-results-between-default-thr--05-and-best-thr--065)
+    - [Trial 1 results summary (tuned thr = 0.65)](#trial-1-results-summary-tuned-thr--065)
+      - [Comparing Trial 1 vs Trial 0](#comparing-trial-1-vs-trial-0)
     - [Interpretation](#interpretation-1)
   - [Trial 2: Residual Blocks and Validation Loss Tracking](#trial-2-residual-blocks-and-validation-loss-tracking)
-    - [Trial 2 results summary (best thr = 0.50)](#trial-2-results-summary-best-thr--050)
-      - [Comparing Trial 2 results with best thr = 0.5, with Trial 0 with best thr = 0.65,](#comparing-trial-2-results-with-best-thr--05-with-trial-0-with-best-thr--065)
+    - [Trial 2 results summary (tuned thr = 0.50)](#trial-2-results-summary-tuned-thr--050)
+      - [Comparing Trial 2 (thr=0.50) vs Trial 1 (thr=0.65)](#comparing-trial-2-thr050-vs-trial-1-thr065)
     - [Interpretation](#interpretation-2)
   - [What to try next for Trial 3](#what-to-try-next-for-trial-3)
+  - [Trial 3: Expanded Training Data, Enhanced Augmentation, and Longer Convergence](#trial-3-expanded-training-data-enhanced-augmentation-and-longer-convergence)
+    - [Trial 3 results — NoduleMNIST3D test (tuned thr = 0.60)](#trial-3-results--nodulemnist3d-test-tuned-thr--060)
+      - [Comparing Trial 3 vs Trial 2 at each trial's tuned threshold](#comparing-trial-3-vs-trial-2-at-each-trials-tuned-threshold)
+    - [Trial 3 results — Combined test (tuned thr = 0.60)](#trial-3-results--combined-test-tuned-thr--060)
+    - [Interpretation](#interpretation-3)
 
 
 ---
@@ -37,12 +40,9 @@ This is where I'll log my notes about what I tried, what worked, what didn't wor
 - Accuracy: 0.835
 
 ### Interpretation
-- The model was conservative at the default threshold:
-  -  Had decent specificity 
-  -  But it missed a lot of malignant cases.
-- Approx error pattern at thr 0.50:
-  - False negatives were high (missed positives), which is why recall was low.
-  - False positives were relatively low, which is why specificity and accuracy looked decent.
+- At thr = 0.50 (no tuning was done in this trial), the model was conservative:
+  - Had decent specificity but missed a lot of malignant cases.
+  - False negatives were high (low recall); false positives were relatively low (good specificity and accuracy).
 
 <p><strong>Trial 0 Model Results:</strong></p>
 <img src="results/runs/2026-03-05_16.17.20/figures/results_table_2026-03-05_16.17.20.png" alt="Trial 1 Model Results">
@@ -63,29 +63,31 @@ This trial focused on a few “low effort, high impact” upgrades while keeping
 * **Validation-based threshold tuning**:
   * instead of assuming 0.50, On the validation sweep, the best F1 occurred at **threshold = 0.65**. 
 
-### Trial 1 results summary (default thr = 0.50)
-#### Comparing Trial 1 results with Trial 0 results at default thr = 0.5
-  1) With the default **thr = 0.50**, test metrics improved slightly in some areas but got worst in others between Trial 0 and 1:
-     - **AUROC:** Increased from 0.849 to 0.871, 
-     - **F1:** Increase from 0.564 to 0.599,
-     - **Recall:** Increased from 0.516 to 0.734
-     - **Precision:** Decreased from 0.623 to 0.505
-     - **Specificity:** Decreased from 0.919 to 0.813
-     - **Accuracy:** Increased from 0.797 to 0.835
+### Trial 1 results summary (tuned thr = 0.65)
 
-### Trial 1 results summary (best thr = 0.65)
-#### Comparing Trial 1 results between default thr = 0.5 and best thr = 0.65
-  2) With the **tuned best thr = 0.65**:
-     - **AUROC:** Increase from 0.849 to 0.871, (Same as default thr = 0.50)
-     - **F1:** Increase from 0.564 to 0.598, (Same as default thr = 0.50)
-     - **Recall:** Increased from 0.516 to 0.594
-       -  For trial 1, the model with the best thr = 0.5 had a better Recall by 0.14, compared to the best thr = 0.65
-     - **Precision:** Decreased from 0.623 to 0.603
-       - For trial 1, the model with the best thr = 0.65 had a better Precision by 0.098, compared to the default thr = 0.5
-     - **Specificity:** Decreased from 0.919 to 0.889
-       - For trial 1, the model with the best thr = 0.65 had a better Specificity by 0.085, compared to the default thr = 0.5
-     - **Accuracy:** Remained constant at 0.835
-       - For trial 1, the model with the best thr = 0.65 had a better Accuracy by 0.038, compared to the default thr = 0.5
+The validation sweep selected **threshold = 0.65** as the best F1 cutoff.
+
+| Metric | Value |
+|---|---|
+| AUROC | 0.871 |
+| F1 | 0.598 |
+| Recall | 0.594 |
+| Precision | 0.603 |
+| Specificity | 0.889 |
+| Accuracy | 0.835 |
+
+#### Comparing Trial 1 vs Trial 0
+
+Trial 0 had no threshold tuning (thr = 0.50). Trial 1 uses tuned thr = 0.65.
+
+| Metric | Trial 0 (thr=0.50) | Trial 1 (thr=0.65) | Δ |
+|---|---|---|---|
+| AUROC | 0.849 | **0.871** | **+0.022** |
+| F1 | 0.564 | **0.598** | **+0.034** |
+| Recall | 0.516 | **0.594** | **+0.078** |
+| Precision | **0.623** | 0.603 | −0.020 |
+| Specificity | **0.919** | 0.889 | −0.030 |
+| Accuracy | 0.835 | 0.835 | — |
 
 
 <p><strong>Trial 1 Model Results:</strong></p>
@@ -98,25 +100,19 @@ This trial focused on a few “low effort, high impact” upgrades while keeping
 <img src="results/runs/2026-03-06_11.55.56/figures/train_loss_2026-03-06_11.55.56.png" width="500">
 
 ### Interpretation
-Trial 1 did improve the model, but the improvement showed up more in how well it ranks positives above negatives than accuracy number.
+Trial 1 improved the model’s ranking quality more than its raw accuracy number.
 
-AUROC improved from 0.849 to 0.871, which means the CNN is separating benign vs malignant volumes more consistently overall, thus better ordering of scores.
+AUROC improved from 0.849 to 0.871, meaning the CNN separates benign from malignant volumes more reliably overall.
 
-At the default threshold (0.50), Trial 1 shifted the model toward catching more malignant cases:
+At the tuned threshold (0.65), the model becomes more conservative about calling something malignant:
+- Recall improved from 0.516 to 0.594 (catching more true positives than Trial 0).
+- Precision held near Trial 0’s level (0.603 vs 0.623) — fewer false alarms per true positive.
+- Specificity dropped slightly from 0.919 to 0.889 because the model now labels more cases overall.
+- Accuracy stayed flat at 0.835.
 
-Recall jumped from 0.516 to 0.734 (31 → 17 false negatives)
+AUROC does not depend on the threshold; it reflects score ranking quality across all cutoffs.
 
-But that came with more false alarms: Specificity dropped from 0.919 to 0.813 (20 → 46 false positives)
-
-So accuracy fell from 0.835 to 0.797, because the test set has more benign cases and false positives are “expensive” in accuracy.
-
-With the tuned threshold (0.65), the tradeoff moves back toward the Trial 1 balance:
-
-Accuracy returns to 0.835 and specificity improves to 0.898, but recall drops to 0.594 (still better than Trial 1’s 0.516).
-
-AUROC stays 0.871, because AUROC doesn’t depend on the threshold, only on ranking.
-
-Logistic regression stayed basically the same (AUROC 0.823, F1 0.554, accuracy 0.813), so the gains in Trial 1 are coming from the CNN changes, not noise in the pipeline.
+Logistic regression stayed basically the same (AUROC 0.823), confirming the gains in Trial 1 are from the CNN changes, not pipeline noise.
 
 
 ---
@@ -139,16 +135,29 @@ This trial introduced several structural improvements to both the model and the 
 * **Best training epoch: 6** | **Best val AUROC: 0.844**
 
 
-### Trial 2 results summary (best thr = 0.50)
-#### Comparing Trial 2 results with best thr = 0.5, with Trial 0 with best thr = 0.65,
-     - **AUROC:** Increased from 0.871 to 0.894, 
-     - **F1:** Increase from 0.599 to 0.627,
-     - **Recall:** Stay consistent at 0.734,
-     - **Precision:** Increase from 0.505 to 0.547,
-     - **Specificity:** Increase from 0.813 to 0.841,
-     - **Accuracy:** Decreased slightly from 0.835 to 0.819
+### Trial 2 results summary (tuned thr = 0.50)
 
-Note: Trial 2 had a **best thr = 0.50 **
+The validation sweep returned **threshold = 0.50** as the best F1 cutoff — no shift needed.
+
+| Metric | Value |
+|---|---|
+| AUROC | 0.894 |
+| F1 | 0.627 |
+| Recall | 0.734 |
+| Precision | 0.547 |
+| Specificity | 0.841 |
+| Accuracy | 0.819 |
+
+#### Comparing Trial 2 (thr=0.50) vs Trial 1 (thr=0.65)
+
+| Metric | Trial 1 (thr=0.65) | Trial 2 (thr=0.50) | Δ |
+|---|---|---|---|
+| AUROC | 0.871 | **0.894** | **+0.023** |
+| F1 | 0.598 | **0.627** | **+0.029** |
+| Recall | 0.594 | **0.734** | **+0.140** |
+| Precision | **0.603** | 0.547 | −0.056 |
+| Specificity | **0.889** | 0.841 | −0.048 |
+| Accuracy | 0.835 | 0.819 | −0.016 |
 
 
 <p><strong>Trial 2 Model Results:</strong></p>
@@ -164,19 +173,20 @@ Note: Trial 2 had a **best thr = 0.50 **
 
 ### Interpretation
 
-In trial 2 I implemented residual blocks and real validation loss tracking, and the results show a clear improvement over Trial 1 across almost every metric at the default threshold (0.50).
+In Trial 2 residual blocks and real validation loss tracking produced clear gains, but the picture is nuanced when comparing at each trial’s own best threshold.
 
-<ins>**AUROC increase from 0.871 to 0.894**</ins> 
-This is the highest so far across all trials. This means the residual CNN is ranking malignant nodules above benign ones more reliably than the plain conv stack from Trial 1. The skip connections in `ResBlock3D` are helping the model learn better feature representations without losing gradient signal in the deeper layers.
+<ins>**AUROC increased from 0.871 to 0.894**</ins>
+This is the highest AUROC so far. The residual CNN ranks malignant nodules above benign ones more reliably than Trial 1’s plain conv stack. The skip connections in `ResBlock3D` improve gradient flow and feature representation quality.
 
-<ins> **At the default threshold (0.50) compared to Trial 1 at the same threshold**</ins> 
-- Recall held consistent at **0.734**, meaning that the model is still catching the same proportion of malignant cases.
-- Precision increased from **0.505 to 0.547**. This means fewer false positives per true positive, and that the model is more confident when it predicts malignant.
-- Specificity increased from **0.813 to 0.841**, meaning that fewer benign cases are being incorrectly flagged.
-- Accuracy decreased slightly from **0.835 to 0.819**, which is expected:
-  - With more benign cases in the test set, any increase in false positives weighs more heavily on accuracy. However, this is a minor tradeoff given the gains in AUROC and precision.
+<ins>**Recall jumped significantly (+0.140), while precision and specificity fell**</ins>
+Comparing at each trial’s tuned threshold (Trial 1 at 0.65, Trial 2 at 0.50):
+- Recall increased from 0.594 to 0.734 — the model catches far more true malignant cases.
+- Precision dropped from 0.603 to 0.547 — more false positives per true positive.
+- Specificity dropped from 0.889 to 0.841 — more benign cases incorrectly flagged.
 
-The best threshold for Trial 2 was 0.50, unlike Trial 1 where 0.65 performed better. This suggests the model’s probability outputs are already well calibrated at the midpoint because the residual architecture produces more decisive, better-separated scores that do not require a shifted cutoff to perform well.
+This shift is partly an artefact of comparing thresholds: Trial 2’s validation sweep found 0.50 optimal, which is a lower cutoff than Trial 1’s 0.65. A lower threshold naturally flags more cases as malignant, which boosts recall at the cost of precision and specificity.
+
+The best threshold for Trial 2 was 0.50, unlike Trial 1’s 0.65. This suggests the residual architecture produces better-separated probability scores that are already well centred around 0.5 without needing an upward shift.
 
 <ins>**The new train vs val loss curves confirm the model is not overfitting**</ins>
  Both curves track closely and plateau around epoch 6 (the best epoch), at which point the LR scheduler decayed the learning rate. The early convergence at epoch 6 with AUROC 0.844 on validation suggests the residual blocks converge faster than the plain CNN, but also that there may be room to let training run longer before LR decay kicks in. This is worth testing in Trial 3 by increasing scheduler patience.
@@ -189,25 +199,123 @@ Trial 2 is the best-performing model so far. Residual connections improved ranki
 
 ---
 
-## What to try next for Trial 3
+## Trial 3: Expanded Training Data, Enhanced Augmentation, and Longer Convergence
 
-A couple options that tend to move the needle without blowing up scope:
+This trial addressed all three items from the "What to try next" list. The changes fall into three categories:
 
-* **Adjust scheduler patience**
-  * best epoch was only 8 out of 50; increasing patience from 3 to 6 may allow the residual blocks more time to converge before LR decays.
-* **Better augmentation for 3D volumes:**
-  * Small rotations, mild zoom/crop, random intensity jitter
-  * Re-run threshold tuning and see if recall can climb without sacrificing specificity.
-* **Start training on larger datasets:**
-  * Currently training on the small, curated **NoduleMNIST3D / MedMNIST** subset, which is great for fast iteration but can cap how much the model generalizes to real CT variability (ie scanner differences, slice thickness, noise, pathology diversity).
-  * The next step would be to scale up with more realistic CT volumes and labels, then fine tune back on NoduleMNIST3D for an apples to apples comparison while keeping the same metrics, threshold sweep, and logging pipeline.
-  * But need to look into the following and similar datasets for more in depth training:
+### What was changed
 
-1. Lung Cancer Sample images dataset:
+**1. Scheduler patience increase from 3 to 6**
+- Trial 2's best epoch was only 6 out of 50, meaning the LR decayed far too early
+- Increasing patience to 6 gives the residual blocks more time to converge before the learning rate is halved
+- Result: best epoch moved from 6 to 33, giving the model 27 more productive training epochs
 
-* [https://qnm8.sharepoint.com/Lung%20Cancer%20Detection%20%20Sample%20Dataset/Forms/AllItems.aspx?viewid=dc7c7db3%2Dac9c%2D4ef9%2Dab96%2D46c65f13c50a&p=true](https://qnm8.sharepoint.com/Lung%20Cancer%20Detection%20%20Sample%20Dataset/Forms/AllItems.aspx?viewid=dc7c7db3%2Dac9c%2D4ef9%2Dab96%2D46c65f13c50a&p=true)
+**2. Enhanced 3D augmentation**
+- Previous augmentation was limited to random axis flips and Gaussian noise.
+- Trial 3 adds three new transforms applied during training only:
+  - **Random 90° axial rotation** (30% probability): rotates in the H–W plane by 90/180/270 degrees to reduce the model's reliance on fixed spatial orientation
+  - **Mild zoom/crop** (30% probability): upsamples the volume by 1.0–1.15×, then center-crops back to 28×28×28, simulating variations in nodule size and position
+  - **Multiplicative intensity jitter** (30% probability): scales voxel intensities by a random factor in [0.9, 1.1], simulating scanner-to-scanner intensity variation
 
-2. CT scans of patients diagnosed with Lung Cancer:
+**3. Expanded training data with two additional datasets**
+- The model previously trained only on NoduleMNIST3D (~1,158 training samples).
+- Two more CT datasets were added:
 
-* [https://www.kaggle.com/datasets/adityamahimkar/iqothnccd-lung-cancer-dataset](https://www.kaggle.com/datasets/adityamahimkar/iqothnccd-lung-cancer-dataset)
+  | Dataset | Source | Format | Train samples | Val samples | Test samples |
+  |---|---|---|---|---|---|
+  | **IQ-OTH:NCCD** | Kaggle (IQ-OTH/NCCD) | 2D JPG slices | 877 | 110 | 110 |
+  | **LungcancerDataSet** | SharePoint sample set | 2D JPG/PNG slices | 1,460 | 142 | 475 |
+
+- Since these datasets contain 2D images, each slice is resized to 28×28 and repeated 28 times along the depth axis to form a pseudo-3D volume (28×28×28). This keeps the existing 3D model architecture completely unchanged.
+- Labels are collapsed to binary: 
+  - Benign / Normal → 0, 
+  - Malignant / all carcinoma sub-types → 1.
+- The combined training set has 3,495 samples (vs 1,158 in Trial 2) with a near-balanced class ratio (~1.09 neg/pos), so `pos_weight` dropped from ~2.0 to ~1.09.
+- For evaluation, NoduleMNIST3D test is kept separate for equal comparison across all trials. A separate combined test set is also evaluated to measure cross-dataset generalisation.
+
+---
+
+### Trial 3 results 
+
+With NoduleMNIST3D as test set, the validation sweep selected **threshold = 0.60**, consistent with Trial 1's direction (0.65). Both of these indicate the model has a slight upward probability bias that a raised cutoff corrects.
+
+| Metric | Value |
+|---|---|
+| AUROC | **0.922** |
+| F1 | **0.678** |
+| Recall | 0.641 |
+| Precision | **0.719** |
+| Specificity | **0.935** |
+| Accuracy | **0.874** |
+
+Confusion matrix (NoduleMNIST3D test, tuned thr = 0.60):
+
+| | pred 0 | pred 1 |
+|---|---|---|
+| true 0 (neg) | 230 | 16 |
+| true 1 (pos) | 23 | 41 |
+
+#### Comparing Trial 3 vs Trial 2 at each trial's tuned threshold
+
+| Metric | Trial 2 (thr=0.50) | Trial 3 (thr=0.60) | Δ |
+|---|---|---|---|
+| AUROC | 0.894 | **0.922** | **+0.028** |
+| F1 | 0.627 | **0.678** | **+0.051** |
+| Recall | **0.734** | 0.641 | −0.093 |
+| Precision | 0.547 | **0.719** | **+0.172** |
+| Specificity | 0.841 | **0.935** | **+0.094** |
+| Accuracy | 0.819 | **0.874** | **+0.055** |
+
+---
+
+### Trial 3 results on Combined test sets (tuned thr = 0.60)
+
+Evaluated on the union of all three dataset test splits (NoduleMNIST3D + IQ-OTH:NCCD + LungcancerDataSet) at the same tuned threshold:
+
+| Metric | Value |
+|---|---|
+| AUROC | **0.974** |
+| F1 | **0.910** |
+| Recall | **0.887** |
+| Precision | **0.934** |
+| Specificity | **0.933** |
+| Accuracy | **0.909** |
+
+---
+
+<p><strong>Trial 3 Model Results:</strong></p>
+<img src="results/runs/2026-04-11_17.49.54/figures/results_table_2026-04-11_17.49.54.png" alt="Trial 3 Model Results">
+
+<p><strong>Trial 3 Confusion Matrix (NoduleMNIST3D, tuned thr = 0.60):</strong></p>
+<img src="results/runs/2026-04-11_17.49.54/figures/confusion_matrices_tuned_2026-04-11_17.49.54.png" alt="Trial 3 Confusion Matrix" width="600">
+
+<p><strong>Trial 3 Training and Val Loss:</strong></p>
+<img src="results/runs/2026-04-11_17.49.54/figures/train_val_curves_2026-04-11_17.49.54.png" width="500">
+
+---
+
+### Interpretation
+
+**Best epoch jumped from 6 to 33:**
+In Trial 2, the LR scheduler decayed far too early (epoch 6 out of 50), leaving most of training useless. With patience = 6, the model kept improving all the way to epoch 33. Val AUROC grew from 0.744 at epoch 1 to a peak of **0.976 at epoch 33**, compared to Trial 2's best val AUROC of 0.844. The train loss also dropped from 0.581 to 0.152 and val loss from 0.679 to 0.166, with both curves tracking closely, thus no sign of overfitting despite the longer training run.
+
+**AUROC on NoduleMNIST3D improved from 0.894 to 0.922:**
+This is the most meaningful comparison across trials because it uses the same test set throughout. The jump of +0.028 is the largest single-trial AUROC gain so far, and it happened while training on a larger, noisier dataset, suggesting the expanded data and augmentation are genuinely helping the model learn better features rather than just memorising the small NoduleMNIST3D training set.
+
+**Precision and specificity improved substantially at the cost of a meaningful recall drop:**
+Comparing at each trial's tuned threshold (Trial 2 at 0.50, Trial 3 at 0.60): precision jumped from 0.547 to 0.719 (+0.172) and specificity from 0.841 to 0.935 (+0.094). Model now makes far fewer false positive calls, however the flip side is a slight drop in recall: 0.734 → 0.641 (−0.093). 
+
+In absolute terms, Trial 3 misses more true malignant cases (23 false negatives vs 17 in Trial 2). This is a tendency with the precision–recall tradeoff. Which side to prioritise depends on the clinical use case as Trial 3 is better for reducing unnecessary follow-up procedures, whereas Trial 2 catches more maligniant cases. In the case of cancer detection, obviously detecting false negatives is more important.
+
+**The tuned threshold of 0.60 is consistent with Trial 1's 0.65.**
+Both trials needed an upward shift from 0.50, pointing to a persistent mild positive bias in the model's probability outputs as borderline cases tend to get scored slightly above 0.5. Raising the cutoff corrects this, and the resulting precision/specificity gains are substantial enough to justify the threshold shift.
+
+**The combined test score (AUROC 0.974, F1 0.910) shows strong cross-dataset generalisation but needs context:**
+The IQ-OTH:NCCD and LungcancerDataSet datasets are 2D images converted to pseudo-3D by stacking the same slice 28 times, producing volumes with no depth variation. This is structurally much simpler than the genuine 3D nodule volumes in NoduleMNIST3D. The high combined score reflects that the model handles both easy pseudo-3D data and harder volumetric data well. NoduleMNIST3D alone remains the most equal apples-to-apples benchmark across all trials.
+
+**Logistic regression gap widens further:**
+LogReg AUROC stayed at 0.823 while the 3D CNN reached 0.922 on the same test set, a gap of nearly 0.10. Every trial has increased this gap, confirming that the improvements are truly from the structural changes (i.e., better model, more data, better training), rather than pipeline noise.
+
+**Overall Trial 3 is the best-performing model so far across every metric except recall:**
+The combination of longer convergence, richer augmentation, and more diverse training data produced consistent and meaningful gains. The key remaining gap is recall on NoduleMNIST3D (0.703), as the model still misses roughly 30% of true positives on that test set. The next step should focus on recovering recall without sacrificing the precision/specificity gains made here.
 

@@ -10,7 +10,7 @@ This project trains a small 3D CNN to classify lung nodules as benign vs maligna
 ## Project Env Setup 
 
 ```bash
-python3 -m venv .venv
+python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 python -m ipykernel install --user --name lung-nodule-3d
