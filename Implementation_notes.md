@@ -3,7 +3,7 @@ This is where I'll log my notes about what I tried, what worked, what didn't wor
 
 
 ## Table of Contents
-- [Implementation Notes](#implementation-notes)
+
   - [Table of Contents](#table-of-contents)
   - [Trial 0: Initial Model Implementation](#trial-0-initial-model-implementation)
     - [Trial 0 results summary (thr = 0.50)](#trial-0-results-summary-thr--050)
@@ -18,10 +18,19 @@ This is where I'll log my notes about what I tried, what worked, what didn't wor
     - [Interpretation](#interpretation-2)
   - [What to try next for Trial 3](#what-to-try-next-for-trial-3)
   - [Trial 3: Expanded Training Data, Enhanced Augmentation, and Longer Convergence](#trial-3-expanded-training-data-enhanced-augmentation-and-longer-convergence)
-    - [Trial 3 results — NoduleMNIST3D test (tuned thr = 0.60)](#trial-3-results--nodulemnist3d-test-tuned-thr--060)
+    - [Trial 3 results: NoduleMNIST3D test (tuned thr = 0.60)](#trial-3-results--nodulemnist3d-test-tuned-thr--060)
       - [Comparing Trial 3 vs Trial 2 at each trial's tuned threshold](#comparing-trial-3-vs-trial-2-at-each-trials-tuned-threshold)
-    - [Trial 3 results — Combined test (tuned thr = 0.60)](#trial-3-results--combined-test-tuned-thr--060)
+    - [Trial 3 results: Combined test (tuned thr = 0.60)](#trial-3-results--combined-test-tuned-thr--060)
     - [Interpretation](#interpretation-3)
+  - [What to try next for Trial 4](#what-to-try-next-for-trial-4)
+  - [Trial 4: Luna16 Integration, Deep3DCNN, and CosineAnnealingLR](#trial-4-Luna16-integration-deep3dcnn-and-cosineannealinglr)
+    - [Model: Deep3DCNN](#model-deep3dcnn)
+    - [New dataset: Luna16](#new-dataset-Luna16)
+    - [Trial 4 results: NoduleMNIST3D test (tuned thr = 0.85)](#trial-4-results--nodulemnist3d-test-tuned-thr--085)
+      - [Comparing Trial 4 vs Trial 3 at each trial's tuned threshold](#comparing-trial-4-vs-trial-3-at-each-trials-tuned-threshold)
+    - [Trial 4 results: per-dataset breakdown (tuned thr = 0.85)](#trial-4-results--per-dataset-breakdown-tuned-thr--085)
+    - [Trial 4 results: Combined test (tuned thr = 0.85)](#trial-4-results--combined-test-tuned-thr--085)
+    - [Interpretation](#interpretation-4)
 
 
 ---
@@ -45,13 +54,13 @@ This is where I'll log my notes about what I tried, what worked, what didn't wor
   - False negatives were high (low recall); false positives were relatively low (good specificity and accuracy).
 
 <p><strong>Trial 0 Model Results:</strong></p>
-<img src="results/runs/2026-03-05_16.17.20/figures/results_table_2026-03-05_16.17.20.png" alt="Trial 1 Model Results">
+<img src="results/runs/Trial00_2026-03-05_16.17.20/figures/results_table_2026-03-05_16.17.20.png" alt="Trial 1 Model Results">
 
 <p><strong>Trial 0 Confusion Matrix:</strong></p>
-<img src="results/runs/2026-03-05_16.17.20/figures/confusion_matrix_2026-03-05_16.17.20.png" alt="Trial 1 Confusion Matrix" width="300">
+<img src="results/runs/Trial00_2026-03-05_16.17.20/figures/confusion_matrix_2026-03-05_16.17.20.png" alt="Trial 1 Confusion Matrix" width="300">
 
 <p><strong>Trial 0 Training Loss:</strong></p>
-<img src="results/runs/2026-03-05_16.17.20/figures/train_loss_2026-03-05_16.17.20.png" width="500">
+<img src="results/runs/Trial00_2026-03-05_16.17.20/figures/train_loss_2026-03-05_16.17.20.png" width="500">
 
 ---
 ## Trial 1: Simple Performance Upgrades
@@ -91,13 +100,13 @@ Trial 0 had no threshold tuning (thr = 0.50). Trial 1 uses tuned thr = 0.65.
 
 
 <p><strong>Trial 1 Model Results:</strong></p>
-<img src="results/runs/2026-03-06_11.55.56/figures/results_table_2026-03-06_11.55.56.png" alt="Trial 1 Model Results">
+<img src="results/runs/Trial01_2026-03-06_11.55.56/figures/results_table_2026-03-06_11.55.56.png" alt="Trial 1 Model Results">
 
 <p><strong>Trial 1 Confusion Matrix:</strong></p>
-<img src="results/runs/2026-03-06_11.55.56/figures/confusion_matrix_2026-03-06_11.55.56.png" alt="Trial 1 Confusion Matrix" width="300">
+<img src="results/runs/Trial01_2026-03-06_11.55.56/figures/confusion_matrix_2026-03-06_11.55.56.png" alt="Trial 1 Confusion Matrix" width="300">
 
 <p><strong>Trial 1 Training Loss:</strong></p>
-<img src="results/runs/2026-03-06_11.55.56/figures/train_loss_2026-03-06_11.55.56.png" width="500">
+<img src="results/runs/Trial01_2026-03-06_11.55.56/figures/train_loss_2026-03-06_11.55.56.png" width="500">
 
 ### Interpretation
 Trial 1 improved the model’s ranking quality more than its raw accuracy number.
@@ -161,13 +170,13 @@ The validation sweep returned **threshold = 0.50** as the best F1 cutoff — no 
 
 
 <p><strong>Trial 2 Model Results:</strong></p>
-<img src="results/runs/2026-03-28_13.15.49/figures/results_table_2026-03-28_13.15.49.png" alt="Trial 1 Model Results">
+<img src="results/runs/Trial02_2026-03-28_13.15.49/figures/results_table_2026-03-28_13.15.49.png" alt="Trial 1 Model Results">
 
 <p><strong>Trial 2 Confusion Matrix:</strong></p>
-<img src="results/runs/2026-03-28_13.15.49/figures/confusion_matrix_2026-03-28_13.15.49.png" alt="Trial 1 Confusion Matrix" width="300">
+<img src="results/runs/Trial02_2026-03-28_13.15.49/figures/confusion_matrix_2026-03-28_13.15.49.png" alt="Trial 1 Confusion Matrix" width="300">
 
 <p><strong>Trial 2 Training and Val Loss:</strong></p>
-<img src="results/runs/2026-03-28_13.15.49/figures/train_val_curves_2026-03-28_13.15.49.png" width="500">
+<img src="results/runs/Trial02_2026-03-28_13.15.49/figures/train_val_curves_2026-03-28_13.15.49.png" width="500">
 
 
 
@@ -284,13 +293,13 @@ Evaluated on the union of all three dataset test splits (NoduleMNIST3D + IQ-OTH:
 ---
 
 <p><strong>Trial 3 Model Results:</strong></p>
-<img src="results/runs/2026-04-11_17.49.54/figures/results_table_2026-04-11_17.49.54.png" alt="Trial 3 Model Results">
+<img src="results/runs/Trial03_2026-04-11_17.49.54/figures/results_table_2026-04-11_17.49.54.png" alt="Trial 3 Model Results">
 
 <p><strong>Trial 3 Confusion Matrix (NoduleMNIST3D, tuned thr = 0.60):</strong></p>
-<img src="results/runs/2026-04-11_17.49.54/figures/confusion_matrices_tuned_2026-04-11_17.49.54.png" alt="Trial 3 Confusion Matrix" width="600">
+<img src="results/runs/Trial03_2026-04-11_17.49.54/figures/confusion_matrices_tuned_2026-04-11_17.49.54.png" alt="Trial 3 Confusion Matrix" width="600">
 
 <p><strong>Trial 3 Training and Val Loss:</strong></p>
-<img src="results/runs/2026-04-11_17.49.54/figures/train_val_curves_2026-04-11_17.49.54.png" width="500">
+<img src="results/runs/Trial03_2026-04-11_17.49.54/figures/train_val_curves_2026-04-11_17.49.54.png" width="500">
 
 ---
 
@@ -319,3 +328,228 @@ LogReg AUROC stayed at 0.823 while the 3D CNN reached 0.922 on the same test set
 **Overall Trial 3 is the best-performing model so far across every metric except recall:**
 The combination of longer convergence, richer augmentation, and more diverse training data produced consistent and meaningful gains. The key remaining gap is recall on NoduleMNIST3D (0.703), as the model still misses roughly 30% of true positives on that test set. The next step should focus on recovering recall without sacrificing the precision/specificity gains made here.
 
+---
+
+## What to try next for Trial 4
+
+Trial 3 demonstrated that richer data and longer training improve AUROC, precision, and specificity, but the model's capacity may now be the limiting factor as `Small3DCNN` has only ~884K parameters. The following changes are planned for Trial 4:
+
+**1. Deeper and wider architecture (`Deeper3DCNN`)**
+- Double the channel widths at every stage: stem 16→32, residual stages (16→32→64→128) → (32→64→128→256).
+- Add a third MaxPool, reducing spatial resolution 28→14→7→3 before the final residual block.
+- This gives ~3.53M parameters (≈4× `Small3DCNN`), large enough to learn richer 3D feature hierarchies.
+- Dropout increased to 0.4 to compensate for the higher capacity.
+
+**2. CosineAnnealingLR scheduler**
+- Replace `ReduceLROnPlateau` with `CosineAnnealingLR(T_max=epochs, eta_min=1e-6)`.
+- Cosine decay is smoother and less sensitive to validation noise: the LR follows a fixed half-cosine curve rather than requiring a plateau to be detected.
+- With a larger model that takes more epochs to converge, a predictable decay schedule is safer than a reactive one.
+
+**3. More epochs (50 → 60)**
+- The deeper model has more parameters to optimise; giving it 10 extra epochs ensures the cosine cycle covers the full training budget.
+
+**Expected outcome:**
+A wider and deeper residual network should extract richer volumetric features from the 3D nodule data. The main risk is overfitting given the larger capacity; the higher dropout and smooth cosine schedule are the primary mitigations. If recall improves back toward Trial 2 levels while maintaining Trial 3's precision/specificity gains, Trial 4 will be a clear step forward.
+
+---
+
+## Trial 4: Luna16 Integration, Deep3DCNN, and CosineAnnealingLR
+
+### Model: Deep3DCNN
+
+`Deep3DCNN` replaces the `Small3DCNN` used in Trials 0–3. It is roughly 4× larger and designed to extract richer spatial hierarchies from 3D nodule volumes.
+
+| Component | Small3DCNN (Trials 0–3) | Deep3DCNN (Trial 4) |
+|---|---|---|
+| Stem channels | 1 → 16 | 1 → 32 |
+| Stage 1 | ResBlock(16→32) + MaxPool → 14³ | ResBlock(32→64) + MaxPool → 14³ |
+| Stage 2 | ResBlock(32→64), no pool → 7³ | ResBlock(64→128) + MaxPool → 7³ |
+| Stage 3 | ResBlock(64→128), no pool → 7³ | ResBlock(128→256) + MaxPool → 3³ |
+| GAP → FC | 128 → 1 | 256 → 1 |
+| Dropout | 0.3 | 0.4 |
+| Params | ~884 K | ~3.53 M (4.0×) |
+
+Key architectural differences:
+- **Third MaxPool**: spatial resolution collapses 28 → 14 → 7 → 3 before the final residual block. This forces the deeper channels to integrate information over a larger spatial context.
+- **Doubled channel widths**: every residual stage is twice as wide, giving the network more feature dimensions at each level.
+- **Higher dropout (0.4)**: compensates for the increased capacity.
+
+Scheduler changed from `ReduceLROnPlateau` to `CosineAnnealingLR(T_max=60, eta_min=1e-6)`. Cosine decay follows a fixed half-cosine curve, avoiding the plateau detection that caused premature LR collapse in Trial 2.
+
+### New Luna16 dataset
+
+Luna16 (Lung Nodule Analysis 2016) is the standard benchmark for pulmonary nodule detection and classification. It provides genuine 3D CT scans sourced from the LIDC-IDRI collection. These are the same scans that NoduleMNIST3D was derived from, but at full resolution.
+
+**Why this matters vs IQ-OTH and LungcancerDataSet:**
+
+| | IQ-OTH / LungcancerDataSet | Luna16 |
+|---|---|---|
+| Format | 2D JPEG screenshots | 3D `.mhd/.raw` CT volumes |
+| Depth variation | None (same slice stacked 28×) | Genuine 3D spatial structure |
+| Intensity values | Arbitrary 8-bit display range | Calibrated Hounsfield Units |
+| Preprocessing | Percentile window + resize | HU window [−1000, 400] → resize to 28³ |
+| Label source | Folder name (class-level) | Per-nodule coordinate annotations |
+
+The pseudo-3D stacking used for IQ-OTH and LungcancerDataSet means the model sees the same 2D pattern repeated 28 times, thus there is no 3D feature to extract in the depth direction. Luna16 patches contain real 3D structure (density gradients, surrounding parenchyma), so the model's 3D convolutional kernels are actually exercised along all three axes.
+
+**Training composition with Luna16 (5 subsets):**
+- Positives: 615 confirmed nodules (diameter 3.3–32.3 mm, median 6.7 mm)
+- Negatives: ~1335 sampled non-nodule candidates (3 per scan)
+- Total Luna16: ~1950 samples, split 80/10/10 stratified
+
+**Combined training set across all datasets:**
+
+| Dataset | Type | Approx. train samples |
+|---|---|---|
+| NoduleMNIST3D | 3D MedMNIST patches | 1,158 |
+| IQ-OTH:NCCD | Pseudo-3D JPEG | 877 |
+| LungcancerDataSet | Pseudo-3D JPEG | 1,460 |
+| Luna16 | Genuine 3D CT patches | ~1,560 |
+| **Total** | | **~5,055** |
+
+---
+
+### Trial 4 results
+
+The validation sweep on the combined val set (NoduleMNIST3D + IQ-OTH + LungcancerDataSet + Luna16) selected **threshold = 0.85**. This has been the highest tuned threshold across all trials.
+
+| Metric | Value |
+|---|---|
+| AUROC | 0.830 |
+| F1 | 0.584 |
+| Recall | 0.625 |
+| Precision | 0.548 |
+| Specificity | 0.866 |
+| Accuracy | 0.816 |
+
+Confusion matrix (NoduleMNIST3D test, tuned thr = 0.85):
+
+| | pred 0 | pred 1 |
+|---|---|---|
+| true 0 (neg) | 213 | 33 |
+| true 1 (pos) | 24 | 40 |
+
+#### Comparing Trial 4 vs Trial 3 at each trial's tuned threshold
+
+| Metric | Trial 3 (thr=0.60) | Trial 4 (thr=0.85) | Δ |
+|---|---|---|---|
+| AUROC | **0.922** | 0.830 | **−0.092** |
+| F1 | **0.678** | 0.584 | **−0.094** |
+| Recall | **0.641** | 0.625 | −0.016 |
+| Precision | **0.719** | 0.548 | **−0.171** |
+| Specificity | **0.935** | 0.866 | **−0.069** |
+| Accuracy | **0.874** | 0.816 | **−0.058** |
+
+Note: This table is comparing based on the NoNoduleMNIST dataset in order to have a fair comparison. However, as we can see the Trial 4 model isn't performing as well as the Trial 3 model, we can see below testing the Trial 4 model on the more comprehensive 3D scan Luna16 dataset, the model has improved significantly in all metrics.
+
+---
+
+### Trial 4 results (tuned thr = 0.85)
+
+| Dataset | AUROC | F1 | Recall | Precision | Specificity | Accuracy |
+|---|---|---|---|---|---|---|
+| NoduleMNIST3D | 0.830 | 0.584 | 0.625 | 0.548 | 0.866 | 0.816 |
+| IQ-OTH:NCCD | **1.000** | **1.000** | **1.000** | **1.000** | **1.000** | **1.000** |
+| LungcancerDataSet | **0.997** | **0.964** | 0.933 | **0.997** | **0.993** | **0.949** |
+| Luna16 | 0.957 | 0.870 | 0.770 | **1.000** | **1.000** | 0.928 |
+| LogReg baseline (NoduleMNIST3D) | 0.823 | 0.538 | 0.547 | 0.530 | 0.874 | 0.806 |
+
+Confusion matrices:
+
+| Dataset | TN | FP | FN | TP |
+|---|---|---|---|---|
+| NoduleMNIST3D | 213 | 33 | 24 | 40 |
+| IQ-OTH:NCCD | 54 | 0 | 0 | 56 |
+| LungcancerDataSet | 133 | 1 | 23 | 318 |
+| Luna16 | 134 | 0 | 14 | 47 |
+
+---
+
+### Trial 4 results on combined datasets testing (tuned thr = 0.85)
+
+| Metric | Value |
+|---|---|
+| AUROC | **0.970** |
+| F1 | **0.907** |
+| Recall | **0.883** |
+| Precision | **0.931** |
+| Specificity | **0.940** |
+| Accuracy | **0.913** |
+
+Confusion matrix (combined test, tuned thr = 0.85):
+
+| | pred 0 | pred 1 |
+|---|---|---|
+| true 0 (neg) | 534 | 34 |
+| true 1 (pos) | 61 | 461 |
+
+<p><strong>Trial 4 Model Results:</strong></p>
+<img src="results/runs/Trial04_2026-04-11_21.40.31/figures/results_table_Trial04_2026-04-11_21.40.31.png" alt="Trial 4 Model Results">
+
+<p><strong>Trial 4 Confusion Matrices (tuned thr = 0.85):</strong></p>
+<img src="results/runs/Trial04_2026-04-11_21.40.31/figures/confusion_matrices_tuned_Trial04_2026-04-11_21.40.31.png" alt="Trial 4 Confusion Matrices" width="700">
+
+<p><strong>Trial 4 Training and Val Loss:</strong></p>
+<img src="results/runs/Trial04_2026-04-11_21.40.31/figures/train_val_curves_Trial04_2026-04-11_21.40.31.png" width="500">
+
+---
+
+### Interpretation
+
+**NoduleMNIST3D AUROC decreased from 0.922 to 0.830 (-0.092):**  
+This is the largest drop in benchmark performance observed across the trials and is the main concern in Trial 4. Even with a larger model and more training data, performance on NoduleMNIST3D became worse.
+
+**The threshold increase to 0.85 suggests a calibration issue:**  
+In earlier trials, threshold tuning was based on a combined validation set dominated by NoduleMNIST3D, IQ-OTH, and LungcancerDataSet. In Trial 4, LUNA16 was added to that validation pool and now represents roughly one quarter of it. LUNA16 has a substantially different data distribution, using genuine 3D HU-windowed volumes rather than the 8-bit preprocessed patches used in NoduleMNIST3D. The model appears to assign much higher logits to LUNA16 positives, which pushes the tuned threshold upward when optimizing combined validation F1. At a threshold of 0.85, the model becomes overly conservative on NoduleMNIST3D, yet still produces 33 false positives. That combination, low precision and a very high threshold, suggests a distribution mismatch across the training domains. The model does not appear to be learning features that transfer consistently across datasets.
+
+**LUNA16 precision = 1.00 and specificity = 1.00 suggest strong dataset-specific fitting:**  
+At a threshold of 0.85, the model makes no false positive predictions on 134 LUNA16 negatives. This indicates that it has learned the visual and preprocessing characteristics of LUNA16 with very high confidence. That same confidence does not transfer to NoduleMNIST3D, whose visual distribution is different. Because threshold selection is based on the combined validation set, the resulting operating point is pulled toward what works best for LUNA16 rather than what works best for NoduleMNIST3D.
+
+**IQ-OTH:NCCD and LungcancerDataSet remain close to saturated:**  
+Both pseudo-3D datasets still achieve AUROC values of at least 0.997. These datasets are relatively simple, since each sample is effectively based on a single repeated 2D image. In practice, the model is solving an easier 2D-style classification problem on these datasets. Their inclusion increases the amount of training data, but they seem to contribute little to the more difficult 3D generalization problem.
+
+**Validation AUROC peaked at 0.969 at epoch 47 of 60:**  
+Training loss decreased steadily from 0.675 to 0.085. Validation loss reached its minimum around epoch 40 at 0.268, then increased slightly to 0.342 by epoch 60. This pattern suggests mild overfitting in the later epochs. The cosine annealing schedule produced smooth convergence, and there is no sign of the premature learning rate collapse seen in Trial 2.
+
+**Best epoch 47 of 60 suggests the schedule was functioning properly:**  
+The model reached its best validation performance at epoch 47 and then continued training with a modest decline afterward. This suggests that an epoch budget closer to 50 to 55 may be more appropriate for a dataset of this size.
+
+**The logistic regression baseline stayed unchanged at 0.823 AUROC:**  
+The logistic regression baseline was retrained only on NoduleMNIST3D, so it was unaffected by the addition of LUNA16. Trial 4 reached 0.830 AUROC on NoduleMNIST3D, which is only 0.007 above the baseline. This is the smallest margin observed in any trial and indicates that the benefit of the more complex multi-domain model has become very limited on the main benchmark.
+
+**Main takeaway:**  
+Adding genuine 3D data from LUNA16 did not improve performance on the main benchmark and instead reduced it. The original expectation was that real 3D data would help the network learn better volumetric features. In practice, the preprocessing differences between LUNA16 and NoduleMNIST3D appear to be large enough that the model is learning dataset-specific patterns rather than shared representations. LUNA16 uses HU-windowed isotropic crops, while NoduleMNIST3D uses MedMNIST's own uint8 preprocessing pipeline. Unless those preprocessing pipelines are brought into closer alignment, combining the datasets is likely to keep producing calibration and transfer issues. At a minimum, threshold tuning should be performed separately for each dataset rather than using one shared threshold across all domains.
+
+---
+
+## What to try next for Trial 5
+
+Trial 4 showed that adding LUNA16 and increasing model capacity improved the combined-test metrics, but hurt performance on the main NoduleMNIST3D benchmark. The main issue no longer appears to be model size. Instead, the results point more strongly to domain mismatch across datasets, especially between LUNA16 and NoduleMNIST3D. The following changes are planned for Trial 5:
+
+**1. Align preprocessing across datasets**
+- The largest concern from Trial 4 is that LUNA16 and NoduleMNIST3D are entering the network with noticeably different intensity distributions and visual characteristics.
+- Trial 5 should reduce this mismatch as much as possible by making the preprocessing pipelines more similar.
+- This could include bringing LUNA16 patches closer to the intensity range and normalization style used by NoduleMNIST3D, or alternatively reprocessing NoduleMNIST3D-like inputs in a way that more closely matches the HU-windowed LUNA16 pipeline.
+- The goal is to make the model learn nodule-related structure rather than dataset-specific appearance cues.
+
+**2. Keep `Deep3DCNN`, but rebalance the training mixture**
+- Trial 4 suggests that the deeper model itself is not the main problem; the larger issue is that the training set mixes genuine 3D patches with pseudo-3D datasets and a different full-CT patch source.
+- Trial 5 should keep `Deep3DCNN`, but reduce the influence of domains that are too easy or too different.
+- One option is to lower the sampling weight of IQ-OTH and LungcancerDataSet, since both are already near-saturated and may contribute little to NoduleMNIST3D generalization.
+- Another option is to use balanced per-dataset sampling so that one domain does not dominate threshold tuning or representation learning.
+
+**3. Tune thresholds separately instead of using one shared threshold**
+- Trial 4 selected a global threshold of 0.85 from the combined validation set, and this clearly did not transfer well to NoduleMNIST3D.
+- Trial 5 should evaluate thresholds separately per dataset, especially for NoduleMNIST3D and LUNA16.
+- This will help determine whether the performance drop is partly a calibration problem rather than only a representation problem.
+- Even if a shared model is kept, the operating point may need to be chosen differently for different domains.
+
+**4. Slightly reduce the epoch budget or add earlier stopping**
+- Trial 4 peaked around epoch 47 and then showed mild overfitting afterward.
+- Trial 5 should either reduce training from 60 epochs to about 50 to 55, or keep 60 epochs with stronger early stopping based on validation AUROC or validation loss.
+- This is a smaller change than the preprocessing fixes above, but it may prevent the later-epoch drift that appeared in Trial 4.
+
+**Expected outcome:**
+Trial 5 should focus less on making the network larger and more on making the training domains compatible. If preprocessing alignment and dataset balancing work as intended, NoduleMNIST3D performance should recover while still keeping the benefits gained from LUNA16. The main goal is to bring AUROC, precision, and specificity on NoduleMNIST3D back toward Trial 3 levels without giving up the stronger 3D learning signal introduced in Trial 4.
+
+---
