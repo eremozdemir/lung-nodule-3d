@@ -104,6 +104,47 @@ def save_json(path: str, obj: Dict):
         json.dump(obj, f, indent=2)
 
 
+def calibrate_temperature(logits: np.ndarray, y_true: np.ndarray) -> float:
+    """
+    Post-hoc temperature scaling calibration.
+
+    Finds the scalar T* that minimises binary cross-entropy NLL on the
+    validation set when probabilities are computed as:
+
+        p_calibrated = sigmoid(logit / T*)
+
+    A temperature T > 1 "softens" overconfident predictions (spreads the
+    probability distribution toward 0.5); T < 1 sharpens them.
+
+    Call this on validation-set raw logits after training is complete, before
+    the threshold sweep.  The returned T* can then be applied as:
+
+        calibrated_logits = raw_logits / T*
+
+    Parameters
+    ----------
+    logits : np.ndarray  shape (N,)  raw model output (pre-sigmoid)
+    y_true : np.ndarray  shape (N,)  binary labels {0, 1}
+
+    Returns
+    -------
+    T* : float, optimal temperature
+    """
+    from scipy.optimize import minimize_scalar
+
+    y = y_true.astype(np.float64)
+
+    def nll(T: float) -> float:
+        if T <= 0:
+            return 1e9
+        p = 1.0 / (1.0 + np.exp(-logits / T))
+        p = np.clip(p, 1e-7, 1.0 - 1e-7)
+        return -np.mean(y * np.log(p) + (1 - y) * np.log(1 - p))
+
+    result = minimize_scalar(nll, bounds=(0.05, 20.0), method="bounded")
+    return float(result.x)
+
+
 def save_checkpoint(path: str, model, optimizer, epoch: int, extra: Dict):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     torch.save(

@@ -1,18 +1,19 @@
 """
-External dataset loaders for IQ-OTH:NCCD, LungcancerDataSet, and LUNA16.
+External dataset loaders for ChestXrayCancerDataset and LUNA16.
 
-IQ-OTH:NCCD and LungcancerDataSet contain 2D CT scan images (JPG/PNG).
-We convert each 2D slice to a pseudo-3D volume (28×28×28) by resizing
-the slice to 28×28 and repeating it 28 times along the depth axis.
+ChestXrayCancerDataset loads 2D chest X-ray images and returns
+(1, 224, 224) float32 tensors with torchvision normalisation.
+A helper function provides ready-made train/val/test splits with
+the appropriate augmentation transforms applied per split.
 
 LUNA16 contains genuine 3D CT volumes in MetaImage (.mhd/.raw) format.
 Nodule patches are extracted at construction time using the annotated
 world coordinates, windowed to the standard lung HU range, and resized
-to 28×28×28 — making them directly compatible with the rest of the pipeline.
+to 28×28×28 — making them directly compatible with the Deep3DCNN pipeline.
 
-Label mapping (binary nodule classification):
+Label mapping (binary classification):
     0 — benign / normal / non-nodule candidate
-    1 — malignant / confirmed nodule
+    1 — malignant / confirmed nodule / cancer
 """
 
 import os
@@ -28,28 +29,10 @@ from tqdm import tqdm
 
 # ── Label maps ────────────────────────────────────────────────────────────────
 
-# IQ-OTH:NCCD: flat layout under "The IQ-OTHNCCD lung cancer dataset/"
-IQOTH_LABEL_MAP = {
-    "Bengin cases":    0,
-    "Malignant cases": 1,
-    "Normal cases":    0,
-}
-
-# LungcancerDataSet: split into train / valid / test sub-trees
-LUNGCANCER_LABEL_MAP = {
-    # generic folders
-    "Bengin cases":                                        0,
-    "BenginCases":                                         0,
-    "normal":                                              0,
-    "Malignant cases":                                     1,
-    "MalignantCases":                                      1,
-    # specific carcinoma sub-types (all malignant)
-    "squamous.cell.carcinoma_left.hilum_T1_N2_M0_IIIa":   1,
-    "squamous.cell.carcinoma":                             1,
-    "adenocarcinoma_left.lower.lobe_T2_N0_M0_Ib":         1,
-    "adenocarcinoma":                                      1,
-    "large.cell.carcinoma_left.hilum_T2_N2_M0_IIIa":      1,
-    "large.cell.carcinoma":                                1,
+# ChestXrayCancerDataset: Cancer/NORMAL folder names
+CXR_LABEL_MAP = {
+    "Cancer": 1,
+    "NORMAL": 0,
 }
 
 
@@ -151,128 +134,123 @@ class Pseudo3DDataset:
         return vol, np.array([label], dtype=np.int64)
 
 
-# ── IQ-OTH:NCCD ──────────────────────────────────────────────────────────────
+# ── ChestXrayCancerDataset ────────────────────────────────────────────────────
 
-class IQOTHNCCDDataset(Pseudo3DDataset):
+class ChestXrayCancerDataset:
     """
-    IQ-OTH:NCCD lung cancer dataset.
+    Chest X-ray lung cancer detection dataset for the CXRClassifier.
 
-    This dataset has no pre-defined splits, so we create stratified
-    train / val / test splits here using a fixed random seed.
+    Returns (tensor, label) where tensor is a (1, 224, 224) float32 image
+    produced by the torchvision transform passed at construction time.
+    The caller is responsible for supplying the appropriate transform
+    (training vs evaluation); use ``make_cxr_splits`` for convenience.
 
-    Expected folder structure under *root*:
-        <root>/
-          The IQ-OTHNCCD lung cancer dataset/
-            The IQ-OTHNCCD lung cancer dataset/
-              Bengin cases/     ← label 0
-              Malignant cases/  ← label 1
-              Normal cases/     ← label 0
+    Expected folder structure under the root split directory:
+        <split>/
+          Cancer/   ← label 1
+          NORMAL/   ← label 0
 
-    The "Test cases/" sibling folder contains unlabelled PNG slices
-    (patient IDs only, no class information) and is intentionally ignored.
+    Parameters
+    ----------
+    samples : list of (path, label) pairs
+        Use ``ChestXrayCancerDataset.collect_samples(root, split)`` to build.
+    transform : torchvision transform or None
+        Applied to each PIL image before returning.  When None, the raw
+        PIL Image is returned (useful for visualisation).
+    """
+
+    def __init__(self, samples: List[Tuple[str, int]], transform=None):
+        self.samples   = samples
+        self.transform = transform
+
+    def __len__(self) -> int:
+        return len(self.samples)
+
+    def __getitem__(self, idx: int) -> Tuple:
+        path, label = self.samples[idx]
+        img = Image.open(path).convert("L")  # grayscale
+        if self.transform is not None:
+            img = self.transform(img)
+        return img, np.array([label], dtype=np.int64)
+
+    @staticmethod
+    def collect_samples(root: str, split: str) -> List[Tuple[str, int]]:
+        """Return (path, label) list for the given split sub-folder."""
+        return _collect_samples(os.path.join(root, split), CXR_LABEL_MAP)
+
+
+def make_cxr_splits(
+    root: str,
+    val_frac: float = 0.15,
+    seed: int = 42,
+    img_size: int = 224,
+) -> Tuple["ChestXrayCancerDataset", "ChestXrayCancerDataset", "ChestXrayCancerDataset"]:
+    """
+    Build train / val / test datasets for the CXR pipeline.
+
+    The provided ``train/`` folder is split into a training portion and an
+    internal validation portion (stratified, ``val_frac`` of the total).
+    The original ``val/`` folder (16 samples) is discarded as too small to
+    produce reliable metrics.  The ``test/`` folder (624 samples) is the
+    held-out evaluation set.
+
+    Augmentation (training split only):
+        RandomHorizontalFlip, RandomRotation(±10°), RandomAffine(shear=5°),
+        ColorJitter(brightness=0.15, contrast=0.15).
+    Both splits are normalised to mean=0.5, std=0.5.
 
     Parameters
     ----------
     root : str
-        Path to the ``IQ-OTH:NCCD`` directory inside ``data/``.
-    split : str
-        One of ``"train"``, ``"val"``, ``"test"``.
+        Path to the ``chest_xray_lung`` directory inside ``data/``.
     val_frac : float
-        Fraction of all labelled samples to reserve for validation.
-    test_frac : float
-        Fraction of all labelled samples to reserve for testing.
+        Fraction of training images reserved for internal validation.
     seed : int
-        Random seed for reproducible splits.
-    vol_size : int
-        Target spatial dimension for the pseudo-3D volume.
+        Random seed for reproducibility.
+    img_size : int
+        Spatial resolution for resizing (default 224, matches ResNet-18).
+
+    Returns
+    -------
+    (train_ds, val_ds, test_ds)
     """
+    try:
+        import torchvision.transforms as T
+    except ImportError as exc:
+        raise ImportError("torchvision is required for make_cxr_splits()") from exc
 
-    def __init__(
-        self,
-        root: str,
-        split: str = "train",
-        val_frac: float = 0.10,
-        test_frac: float = 0.10,
-        seed: int = 42,
-        vol_size: int = 28,
-    ):
-        data_root = os.path.join(
-            root,
-            "The IQ-OTHNCCD lung cancer dataset",
-            "The IQ-OTHNCCD lung cancer dataset",
-        )
-        all_samples = _collect_samples(data_root, IQOTH_LABEL_MAP)
+    _norm = T.Normalize(mean=[0.5], std=[0.5])
 
-        paths  = [s[0] for s in all_samples]
-        labels = [s[1] for s in all_samples]
+    train_transform = T.Compose([
+        T.Resize((img_size, img_size)),
+        T.RandomHorizontalFlip(p=0.5),
+        T.RandomRotation(degrees=10),
+        T.RandomAffine(degrees=0, shear=5),
+        T.ColorJitter(brightness=0.15, contrast=0.15),
+        T.ToTensor(),
+        _norm,
+    ])
+    eval_transform = T.Compose([
+        T.Resize((img_size, img_size)),
+        T.ToTensor(),
+        _norm,
+    ])
 
-        # First carve out the test set
-        p_trainval, p_test, y_trainval, y_test = train_test_split(
-            paths, labels,
-            test_size=test_frac,
-            stratify=labels,
-            random_state=seed,
-        )
-        # Then split val out of the remaining data
-        adjusted_val_frac = val_frac / (1.0 - test_frac)
-        p_train, p_val, y_train, y_val = train_test_split(
-            p_trainval, y_trainval,
-            test_size=adjusted_val_frac,
-            stratify=y_trainval,
-            random_state=seed,
-        )
+    # Split train/ folder into train + internal val
+    all_samples = ChestXrayCancerDataset.collect_samples(root, "train")
+    paths  = [s[0] for s in all_samples]
+    labels = [s[1] for s in all_samples]
+    p_tr, p_va, y_tr, y_va = train_test_split(
+        paths, labels, test_size=val_frac, stratify=labels, random_state=seed
+    )
 
-        split_samples = {
-            "train": list(zip(p_train, y_train)),
-            "val":   list(zip(p_val,   y_val)),
-            "test":  list(zip(p_test,  y_test)),
-        }
-        super().__init__(split_samples[split], vol_size)
+    test_samples = ChestXrayCancerDataset.collect_samples(root, "test")
 
-
-# ── LungcancerDataSet ─────────────────────────────────────────────────────────
-
-class LungCancerDataset(Pseudo3DDataset):
-    """
-    LungcancerDataSet — already split into train / valid / test sub-trees.
-
-    Expected folder structure under *root*:
-        <root>/
-          Data/
-            train/
-              Bengin cases/
-              Malignant cases/
-              normal/
-              squamous.cell.carcinoma_left.hilum_T1_N2_M0_IIIa/
-              adenocarcinoma_left.lower.lobe_T2_N0_M0_Ib/
-              large.cell.carcinoma_left.hilum_T2_N2_M0_IIIa/
-            valid/          ← same structure as train
-            test/
-              BenginCases/
-              MalignantCases/
-              normal/
-              squamous.cell.carcinoma/
-              adenocarcinoma/
-              large.cell.carcinoma/
-
-    Parameters
-    ----------
-    root : str
-        Path to the ``LungcancerDataSet`` directory inside ``data/``.
-    split : str
-        One of ``"train"``, ``"val"``, ``"test"``.
-    vol_size : int
-        Target spatial dimension for the pseudo-3D volume.
-    """
-
-    # Map our split names to the on-disk folder names
-    _SPLIT_FOLDER = {"train": "train", "val": "valid", "test": "test"}
-
-    def __init__(self, root: str, split: str = "train", vol_size: int = 28):
-        folder = self._SPLIT_FOLDER[split]
-        data_root = os.path.join(root, "Data", folder)
-        samples = _collect_samples(data_root, LUNGCANCER_LABEL_MAP)
-        super().__init__(samples, vol_size)
+    return (
+        ChestXrayCancerDataset(list(zip(p_tr, y_tr)), train_transform),
+        ChestXrayCancerDataset(list(zip(p_va, y_va)), eval_transform),
+        ChestXrayCancerDataset(test_samples,           eval_transform),
+    )
 
 
 # ── LUNA16 ────────────────────────────────────────────────────────────────────
@@ -326,9 +304,28 @@ def _extract_luna16_patch(
                    yi_p - hry: yi_p + hry,
                    xi_p - hrx: xi_p + hrx].copy()
 
-    # Lung HU window → uint8
-    crop = np.clip(crop, -1000.0, 400.0)
-    crop = ((crop + 1000.0) / 1400.0 * 255.0).astype(np.uint8)
+    # ── Intensity normalization ──────────────────────────────────────────────
+    # Trial 6: use percentile-based windowing identical to the approach used
+    # for IQ-OTH:NCCD and NoduleMNIST3D, rather than the absolute HU window.
+    #
+    # Problem with the old approach (HU clip [-1000,400] → uint8):
+    #   The raw distribution of a 40mm lung patch is dominated by air (-1000 HU)
+    #   which maps to pixel 0, so the nodule occupies only the top ~30% of the
+    #   [0,255] range.  NoduleMNIST3D patches use MedMNIST's own per-patch
+    #   percentile rescaling, so they span the full [0,255] range.  This
+    #   intensity mismatch is one of the main causes of the domain gap observed
+    #   in Trials 4 and 5.
+    #
+    # Fix: clip to the [1st, 99th] percentile of this crop, then rescale to
+    # [0, 255].  This is equivalent to what _apply_lung_window() does for the
+    # pseudo-3D datasets, and empirically what MedMNIST does for NoduleMNIST3D.
+    lo = np.percentile(crop, 1)
+    hi = np.percentile(crop, 99)
+    if hi > lo:
+        crop = np.clip(crop, lo, hi)
+        crop = ((crop - lo) / (hi - lo) * 255.0).astype(np.uint8)
+    else:
+        crop = np.zeros_like(crop, dtype=np.uint8)
 
     # Resize to target cube
     zoom_factors = [out_size / s for s in crop.shape]

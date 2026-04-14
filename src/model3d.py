@@ -1,9 +1,15 @@
+# model3d.py — backward-compatibility shim.
+# Import both architectures from their dedicated files.
+from src.model3d_small import ResBlock3D, Small3DCNN          # noqa: F401
+from src.model3d_deep  import ResBlock3D, Deep3DCNN            # noqa: F401
+
+# ── Legacy definitions kept below so existing imports still resolve ────────────
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 
-class ResBlock3D(nn.Module):
+class ResBlock3D(nn.Module):  # type: ignore[no-redef]
     """
     Simple 3D residual block: two conv layers with a skip connection.
     If in_ch != out_ch, a 1x1 conv is used to match dimensions.
