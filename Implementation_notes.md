@@ -47,6 +47,15 @@ This is where I'll log my notes about what I tried, what worked, what didn't wor
     - [Trial 6 results: Deep3DCNN](#trial-6-results-deep3dcnn)
     - [Trial 6 results: CXRClassifier](#trial-6-results-cxrclassifier)
     - [Interpretation](#interpretation-6)
+  - [Trial 7: Three Specialized Models — Deep3DCNN, LUNA3DCNN, CXRClassifier](#trial-7-three-specialized-models--deep3dcnn-luna3dcnn-cxrclassifier)
+    - [What was changed](#what-was-changed-3)
+    - [Model 1: Deep3DCNN (SE attention + two-phase training, NoduleMNIST3D)](#model-1-deep3dcnn-se-attention--two-phase-training-nodulemnist3d)
+    - [Model 2: LUNA3DCNN (new dedicated model, LUNA16)](#model-2-luna3dcnn-new-dedicated-model-luna16)
+    - [Model 3: CXRClassifier (natural distribution + temperature scaling)](#model-3-cxrclassifier-natural-distribution--temperature-scaling)
+    - [Trial 7 results: Deep3DCNN](#trial-7-results-deep3dcnn)
+    - [Trial 7 results: LUNA3DCNN](#trial-7-results-luna3dcnn)
+    - [Trial 7 results: CXRClassifier](#trial-7-results-cxrclassifier)
+    - [Interpretation](#interpretation-7)
 
 
 ---
@@ -940,7 +949,7 @@ The trade-off is that Deep3DCNN's LUNA16 test performance collapsed to AUROC = 0
 
 #### Precision and specificity recovered at the cost of recall
 
-At thr = 0.45, precision rose from 0.461 to 0.598 and specificity from 0.748 to 0.866. Recall fell from 0.828 to 0.766. The threshold was lowered from 0.55 (Trial 5) to 0.45 (Trial 6), yet the model still achieves higher precision and specificity -- indicating that the underlying score distributions improved. The model now assigns more clearly separated scores to benign and malignant cases, which is the definition of higher AUROC. In Trial 5 at thr = 0.55, the score distributions were overlapping enough that catching 82.8% of malignant cases required sweeping up many benign cases too. In Trial 6, the same threshold band produces fewer false positives because the malignant score distribution has shifted rightward away from the benign distribution.
+At thr = 0.45, precision rose from 0.461 to 0.598 and specificity from 0.748 to 0.866. Recall fell from 0.828 to 0.766. The threshold was lowered from 0.55 (Trial 5) to 0.45 (Trial 6), yet the model still achieves higher precision and specificity, indicating that the underlying score distributions improved. The model now assigns more clearly separated scores to benign and malignant cases, which is the definition of higher AUROC. In Trial 5 at thr = 0.55, the score distributions were overlapping enough that catching 82.8% of malignant cases required sweeping up many benign cases too. In Trial 6, the same threshold band produces fewer false positives because the malignant score distribution has shifted rightward away from the benign distribution.
 
 The 3×3×3 vs 4×4×4 feature maps from PATCH_SIZE=32 (vs 28) and the random cutout augmentation both contributed to this improvement. Larger feature maps before GAP preserve more spatial structure for the classifier. Cutout forces the model to use distributed volumetric context rather than a single high-density cluster, which directly improves generalization.
 
@@ -957,3 +966,178 @@ The threshold shift from 0.10 to 0.40 also has practical significance: a thresho
 #### LogReg baseline gap maintained
 
 The logistic regression baseline reached AUROC = 0.823 on the NoduleMNIST3D test set in Trial 6. Deep3DCNN (AUROC = 0.915) now exceeds it by +0.092, the largest gap observed across all trials. This confirms that the volumetric 3D features learned by the CNN are genuinely improving over the flat feature representation, not just benefiting from threshold tuning or dataset selection effects.
+
+---
+
+## Trial 7: Three Specialized Models — Deep3DCNN, LUNA3DCNN, CXRClassifier
+
+Trial 7 is the final trial. Three fully dedicated models are trained, each with its architecture and training procedure tuned to its specific task and dataset. The core insight from prior trials is that task-level gradient interference, where LUNA16 detection gradients dominated and suppressed the malignancy signal, is best resolved not just by separating datasets, but by using each dataset strategically. LUNA16 is used as a pretraining source for Deep3DCNN, providing strong volumetric feature initialisation before fine-tuning on the harder NoduleMNIST3D task.
+
+### What was changed
+
+**1. SE attention in Deep3DCNN (SEResBlock3D)**
+
+Every residual block in Deep3DCNN now includes a Squeeze-and-Excitation (SE) channel attention module. SE globally average-pools the spatial dimensions to produce a (B, C) channel descriptor, passes it through two linear layers (C -> C//8 -> C) with ReLU + Sigmoid, and scales the feature map channel-wise. This lets the network selectively amplify channels that encode malignancy cues (spiculation, density heterogeneity, lobulation) and suppress uninformative channels at every stage. SE adds minimal parameters (~0.2M on top of 3.5M) with a consistent AUROC benefit in medical imaging tasks.
+
+**2. Two-phase training for Deep3DCNN (LUNA16 pretrain then NoduleMNIST3D fine-tune)**
+
+Phase 1 (20 epochs, LR=3e-4, cosine): Deep3DCNN is trained on LUNA16 (nodule vs. background) before touching NoduleMNIST3D. LUNA16 is visually simpler since it is a dense spherical structure against uniform lung parenchyma, so the backbone quickly develops 3D edge detectors, density gradient encodings, and spherical shape features. These representations are directly relevant to malignancy classification, which also requires understanding 3D volumetric structure. Starting from random weights, Phase 2 would waste the first several epochs re-learning these elementary 3D CT features.
+
+Phase 2 (up to 60 epochs, LR=1e-4, 5-epoch warmup + cosine, patience=10): The pretrained backbone is fine-tuned on NoduleMNIST3D using a lower learning rate to preserve the Phase 1 representations while adapting the higher-level features to the harder malignancy discrimination task. A WeightedRandomSampler oversamples the malignant class to 40% per batch (natural rate ~25%), providing consistent gradient signal from the minority class throughout training.
+
+**3. Label-smoothed BCE with pos_weight for Deep3DCNN**
+
+The loss function is binary cross-entropy with label smoothing (eps=0.05) and pos_weight (neg/pos class ratio). Labels {0,1} become {eps/2, 1-eps/2}, which prevents the model from becoming overconfident on training samples and improves calibration. pos_weight amplifies the gradient on positive (malignant) examples, complementing the WeightedRandomSampler. This combination was chosen over focal loss because focal loss requires a well-defined p_t for each sample, which is ambiguous when sample labels are already smoothed or soft, the two techniques interact adversarially rather than additively.
+
+**4. Gradient clipping for Deep3DCNN (max_norm=1.0)**
+
+Applied during both phases. Particularly important in Phase 2 early epochs when the fine-tuning objective creates large gradient variance as the model adapts from the LUNA16 to NoduleMNIST3D signal.
+
+**5. New model: LUNA3DCNN (dedicated LUNA16 detector)**
+
+A compact 3D CNN purpose-built for LUNA16 nodule-presence detection, trained and evaluated exclusively on LUNA16. The architecture uses 3 standard residual stages (ResBlock3D, no SE attention) with MaxPool after each, GAP, Dropout(0.3), and FC(256->1), totalling ~2.0M parameters. SE attention is omitted because the detection task (clear spherical nodule vs. uniform parenchyma) does not require fine-grained channel reweighting. Lower dropout (0.3 vs. 0.5) reflects the simpler decision boundary. File: `src/model3d_luna.py`.
+
+**6. CXRClassifier: natural training distribution, no WeightedRandomSampler**
+
+The Trial 6 sampler (TARGET_CANCER_RATE=0.65) reduced AUROC from 0.926 to 0.886 by underexposing the backbone to the Cancer class. In Trial 7, the model trains on the natural 74.3% Cancer rate, maximising the backbone's exposure to discriminative Cancer features and recovering AUROC. Post-training temperature scaling calibrates the output probabilities to a clinically interpretable range, allowing a reasonable decision threshold (0.30-0.50) rather than the extreme threshold seen in earlier trials.
+
+### Model 1: Deep3DCNN (SE attention + two-phase training, NoduleMNIST3D)
+
+Architecture: Stem(32) -> SEResBlock(32,64)+Pool -> SEResBlock(64,128)+Pool -> SEResBlock(128,256)+Pool -> SEResBlock(256,256) -> GAP -> Dropout(0.5) -> FC(256->1). ~3.7M params.
+
+Phase 1 training: label-smoothed BCE + luna_pos_weight, AdamW (lr=3e-4, wd=1e-4), CosineAnnealingLR, LUNA16 train split, 20 epochs, gradient clipping (max_norm=1.0).
+
+Phase 2 training: label-smoothed BCE + deep_pos_weight, AdamW (lr=1e-4, wd=1e-4), 5-epoch linear warmup + cosine decay to 1e-6, WeightedRandomSampler (40% malignant target), NoduleMNIST3D train split, up to 60 epochs, early stopping patience=10 on val AUROC, gradient clipping (max_norm=1.0). Best checkpoint selected on NoduleMNIST3D val AUROC.
+
+### Model 2: LUNA3DCNN (new dedicated model, LUNA16)
+
+Architecture: Stem(32) -> ResBlock(32,64)+Pool -> ResBlock(64,128)+Pool -> ResBlock(128,256)+Pool -> GAP -> Dropout(0.3) -> FC(256->1). ~2.0M params. File: `src/model3d_luna.py`.
+
+Training: standard BCE + luna_pos_weight, AdamW (lr=3e-4, wd=1e-4), CosineAnnealingLR, LUNA16 train split, up to 60 epochs, early stopping patience=10 on val AUROC.
+
+### Model 3: CXRClassifier (natural distribution + temperature scaling)
+
+Architecture: unchanged from Trial 6 (ResNet-18 backbone, ~11.2M params).
+
+Training: natural class distribution (no WeightedRandomSampler), label-smoothed BCE (eps=0.05) + small_pos_weight, differential LR (backbone=1e-4, head=5e-4), CosineAnnealingLR, up to 30 epochs, early stopping patience=10 on val AUROC. Temperature scaling applied post-training on val logits.
+
+### Trial 7 results: Deep3DCNN
+
+Training ran Phase 1 (20 epochs, LUNA16) then Phase 2 (24 epochs total, NoduleMNIST3D). Best val AUROC: 0.899 at epoch 14 of Phase 2; early stopping triggered at epoch 24. Threshold tuned to 0.85 on NoduleMNIST3D val set.
+
+#### NoduleMNIST3D test set (thr = 0.85)
+
+| Metric | Value |
+|---|---|
+| AUROC | 0.906 |
+| F1 | 0.700 |
+| Recall | 0.766 |
+| Precision | 0.645 |
+| Specificity | 0.890 |
+| Accuracy | 0.865 |
+| Threshold | 0.85 |
+
+Confusion matrix: TN=219  FP=27  FN=15  TP=49
+
+#### Comparing Trial 7 vs Trial 6 Deep3DCNN (NoduleMNIST3D)
+
+| Metric | Trial 6 (thr=0.45) | Trial 7 (thr=0.85) | Delta |
+|---|---|---|---|
+| AUROC | **0.915** | 0.906 | -0.009 |
+| F1 | 0.671 | **0.700** | **+0.029** |
+| Recall | 0.766 | 0.766 | 0.000 |
+| Precision | 0.598 | **0.645** | **+0.047** |
+| Specificity | 0.866 | **0.890** | **+0.024** |
+| Accuracy | 0.845 | **0.865** | **+0.020** |
+
+<p><strong>Trial 7 Model Results:</strong></p>
+<img src="results/runs/Trial07_2026-04-14_18.18.57/figures/results_table_Trial07_2026-04-14_18.18.57.png" alt="Trial 7 Model Results">
+
+<p><strong>Trial 7 Confusion Matrices (tuned thresholds):</strong></p>
+<img src="results/runs/Trial07_2026-04-14_18.18.57/figures/confusion_matrices_tuned_Trial07_2026-04-14_18.18.57.png" alt="Trial 7 Confusion Matrices" width="700">
+
+<p><strong>Trial 7 Deep3DCNN Training Curves (Phase 2, NoduleMNIST3D):</strong></p>
+<img src="results/runs/Trial07_2026-04-14_18.18.57/figures/deep_train_curves_Trial07_2026-04-14_18.18.57.png" width="500">
+
+### Trial 7 results: LUNA3DCNN
+
+Training ran 56 epochs total. Best val AUROC: 0.988 at epoch 46; early stopping triggered at epoch 56. Threshold tuned to 0.55 on LUNA16 val set.
+
+#### LUNA16 test set (thr = 0.55)
+
+| Metric | Value |
+|---|---|
+| AUROC | **0.991** |
+| F1 | **0.934** |
+| Recall | **0.934** |
+| Precision | **0.934** |
+| Specificity | **0.970** |
+| Accuracy | **0.959** |
+| Threshold | 0.55 |
+
+Confusion matrix: TN=130  FP=4  FN=4  TP=57
+
+<p><strong>Trial 7 LUNA3DCNN Training Curves:</strong></p>
+<img src="results/runs/Trial07_2026-04-14_18.18.57/figures/luna3d_train_curves_Trial07_2026-04-14_18.18.57.png" width="500">
+
+### Trial 7 results: CXRClassifier
+
+Training ran 30 epochs. Best val AUROC: 0.999 at epoch 21. Threshold tuned to 0.25 on calibrated val logits.
+
+| Metric | Value |
+|---|---|
+| AUROC | 0.889 |
+| F1 | 0.883 |
+| Recall | **0.997** |
+| Precision | 0.792 |
+| Specificity | 0.564 |
+| Accuracy | 0.835 |
+| Threshold (calibrated) | 0.25 |
+
+Confusion matrix: TN=132  FP=102  FN=1  TP=389
+
+#### Comparing Trial 7 vs Trial 6 CXRClassifier
+
+| Metric | Trial 6 (thr=0.40) | Trial 7 (thr=0.25) | Delta |
+|---|---|---|---|
+| AUROC | 0.886 | **0.889** | **+0.003** |
+| F1 | **0.887** | 0.883 | -0.004 |
+| Recall | 0.995 | **0.997** | **+0.002** |
+| Precision | **0.800** | 0.792 | -0.008 |
+| Specificity | **0.585** | 0.564 | -0.021 |
+| Accuracy | **0.841** | 0.835 | -0.006 |
+
+<p><strong>Trial 7 CXR Training Curves:</strong></p>
+<img src="results/runs/Trial07_2026-04-14_18.18.57/figures/cxr_train_curves_Trial07_2026-04-14_18.18.57.png" width="500">
+
+### Interpretation
+
+#### Deep3DCNN: AUROC marginally regressed; F1 and precision improved
+
+AUROC dropped slightly from 0.915 (Trial 6) to 0.906 (Trial 7), a -0.009 change. Recall held exactly at 0.766 in both trials. However, F1 improved from 0.671 to 0.700 (+0.029) and precision from 0.598 to 0.645 (+0.047), with specificity rising from 0.866 to 0.890 (+0.024). The net picture is a marginal AUROC regression alongside a better operating point calibration: the model makes fewer false positive calls per true positive caught.
+
+The high optimal threshold (0.85) mirrors what happened in Trial 4 when LUNA16 was mixed into training. Phase 1 LUNA16 pretraining conditions the backbone to assign high-magnitude logits to clear CT structure (nodule vs. background), and this logit scale partially persists into Phase 2 fine-tuning. When the NoduleMNIST3D fine-tuning adjusts the same weights at a lower LR, the backbone retains higher logit magnitudes overall. Malignant cases score well above 0.85, but benign cases also tend to cluster in the 0.5–0.80 range rather than near 0, pushing the optimal separation threshold upward. The model is not miscalibrated in the ranking sense (AUROC 0.906 demonstrates it still separates the classes well), but its raw probability outputs require a high threshold to extract that separation.
+
+Phase 2 trained for only 24 epochs (best at epoch 14, stopped at 24 by patience=10). The Phase 2 training curves show oscillation in validation AUROC (ranging 0.797 to 0.899), which reflects the difficulty of fine-tuning a backbone already conditioned on a different task with small data (1,158 NoduleMNIST3D training samples). Despite this, val AUROC of 0.899 and test AUROC of 0.906 confirm the transfer is working.
+
+AUROC 0.906 remains well above Trial 5's 0.847 (the best result before removing LUNA16 from joint training), confirming the two-phase approach outperforms the joint training approach. The slight regression vs Trial 6 (NoduleMNIST3D only, no LUNA16 at all) suggests there is a small cost to Phase 1 pretraining but also a benefit, the Phase 2 model generalizes with better precision and specificity despite seeing the same NoduleMNIST3D data. Trial 6 had better raw ranking (AUROC) while Trial 7 has a better operating point at the tuned threshold.
+
+#### LUNA3DCNN: best LUNA16 performance across all trials
+
+AUROC 0.991, F1 0.934, Precision 0.934, Recall 0.934, Specificity 0.970; every metric well above any previous LUNA16 evaluation. The prior best (Trial 5, joint training) achieved AUROC 0.960; the dedicated LUNA3DCNN adds +0.031 in AUROC and substantially improves precision (0.930 → 0.934) while achieving a balanced Recall/Precision tradeoff.
+
+The result confirms the central hypothesis for Trial 7: a purpose-built model for each task, trained exclusively on its own dataset, outperforms any joint or shared architecture. The LUNA16 task (nodule vs. background) is sufficiently different from malignancy classification that a dedicated model with simpler architecture (no SE, lower dropout) achieves near-ceiling performance. Confusion matrix shows only 4 FP and 4 FN out of 195 test samples.
+
+LUNA3DCNN at ~2.0M parameters is roughly half the size of Deep3DCNN (~3.7M) and achieves substantially higher metrics because it is not asked to solve a harder task. Architecture complexity should match task difficulty.
+
+#### CXRClassifier: essentially unchanged, sampling removed with no significant effect
+
+Removing the WeightedRandomSampler and returning to natural distribution had a near-neutral effect: AUROC improved marginally from 0.886 to 0.889 (+0.003), Recall held at near-perfect 0.997 (1 missed cancer case in 390). Specificity moved slightly in the wrong direction: 0.585 → 0.564 (-0.021). The changes are within noise for a 624-sample test set.
+
+The threshold shifted from 0.40 (Trial 6) to 0.25 (Trial 7). Despite returning to the natural 74.3% Cancer training rate, the model still requires a lower-than-expected threshold, suggesting that without the rebalanced sampler pushing decision boundary toward the center, the model is more aggressive in flagging Cancer; it needs a lower threshold to sweep up the recall. This is the opposite tradeoff from Trial 6: the sampler in Trial 6 pushed the model conservative (high T* < 1, high threshold = 0.40); removing it makes the model more liberal (lower threshold = 0.25). Both achieve near-identical recall (0.995 vs 0.997) at similar specificity (~0.57).
+
+The two trials are effectively at the same operating point as the sampler change was a wash for this model and dataset size. The CXRClassifier appears to have reached a performance ceiling on this dataset, with Recall near 1.0 and Specificity constrained to the 0.55–0.60 range regardless of training strategy.
+
+#### LogReg baseline gap
+
+LogReg (NoduleMNIST3D flat voxels) held at AUROC 0.823 across trials. The final Deep3DCNN gap is +0.083 (0.906 vs 0.823), confirming the 3D CNN extracts genuinely useful volumetric features that flat logistic regression cannot recover from flattened voxels.

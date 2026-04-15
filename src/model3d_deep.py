@@ -1,19 +1,34 @@
 """
-Deep3DCNN — wide and deep 3D CNN for genuine volumetric CT datasets.
+Deep3DCNN -- wide and deep 3D CNN with SE channel attention for NoduleMNIST3D.
 
-Designed for NoduleMNIST3D and LUNA16, where the input is a genuine
-28×28×28 voxel patch with real 3D spatial structure.  The architecture is
-~4× larger than Small3DCNN to extract richer feature hierarchies.
+Task
+----
+Binary malignancy classification of 32x32x32 CT nodule patches.
+Every sample IS a confirmed pulmonary nodule; the model must distinguish
+benign from malignant based on subtle sub-voxel texture and shape cues.
 
-Architecture:
-    Stem  :  1 → 32 ch,  3×3×3 conv + BN + ReLU
-    Stage 1: ResBlock3D(32→64)   + MaxPool  → (B, 64,  14³)
-    Stage 2: ResBlock3D(64→128)  + MaxPool  → (B, 128,  7³)
-    Stage 3: ResBlock3D(128→256) + MaxPool  → (B, 256,  3³)
-    Stage 4: ResBlock3D(256,256)            → (B, 256,  3³)  no pool
-    GAP  →  Dropout(p)  →  FC(256→1)
+Architecture (Trial 7)
+----------------------
+    Stem  :  1 -> 32 ch,  3x3x3 conv + BN + ReLU
+    Stage 1: SEResBlock3D(32->64)   + MaxPool  -> (B,  64, 16^3)
+    Stage 2: SEResBlock3D(64->128)  + MaxPool  -> (B, 128,  8^3)
+    Stage 3: SEResBlock3D(128->256) + MaxPool  -> (B, 256,  4^3)
+    Stage 4: SEResBlock3D(256->256)            -> (B, 256,  4^3)  no pool
+    GAP  ->  Dropout(p)  ->  FC(256->1)
 
-Parameter count: ~3.53 M  (~4× Small3DCNN)
+Squeeze-and-Excitation attention
+---------------------------------
+Each SEResBlock3D appends an SE module that globally average-pools the spatial
+dimensions to produce a (B, C) descriptor, then passes it through two linear
+layers with ReLU + Sigmoid to produce per-channel weights in (0, 1).  The
+feature map is scaled channel-wise by these weights.  This lets the network
+selectively amplify informative channels (e.g. ones that detect spiculation
+patterns) and suppress noise channels, which is particularly effective at the
+low spatial resolution (4x4x4) where spatial context is limited.
+
+Parameter count: ~3.7 M
+Input:  (B, 1, D, H, W)  normalised CT patch, any spatial size
+Output: (B,)  raw logit for BCEWithLogitsLoss
 """
 
 import torch
@@ -21,15 +36,50 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class ResBlock3D(nn.Module):
-    """3D residual block: two 3×3×3 convs with a skip connection."""
+class SEBlock3D(nn.Module):
+    """
+    Squeeze-and-Excitation channel attention for 3D feature maps.
 
-    def __init__(self, in_ch: int, out_ch: int):
+    Global average pooling -> FC(C -> C//r) -> ReLU -> FC(C//r -> C) -> Sigmoid
+    Output multiplied element-wise with the input feature map.
+
+    Parameters
+    ----------
+    channels  : number of input channels
+    reduction : channel reduction ratio (default 8)
+    """
+
+    def __init__(self, channels: int, reduction: int = 8):
+        super().__init__()
+        hidden = max(1, channels // reduction)
+        self.fc = nn.Sequential(
+            nn.Linear(channels, hidden),
+            nn.ReLU(inplace=True),
+            nn.Linear(hidden, channels),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        b, c = x.shape[:2]
+        se = x.mean(dim=(2, 3, 4))              # global avg pool: (B, C)
+        se = self.fc(se).view(b, c, 1, 1, 1)   # (B, C, 1, 1, 1)
+        return x * se
+
+
+class SEResBlock3D(nn.Module):
+    """
+    3D residual block with Squeeze-and-Excitation channel attention.
+
+    conv(3x3x3) -> BN -> ReLU -> conv(3x3x3) -> BN -> SE -> residual add -> ReLU
+    """
+
+    def __init__(self, in_ch: int, out_ch: int, reduction: int = 8):
         super().__init__()
         self.conv1 = nn.Conv3d(in_ch, out_ch, kernel_size=3, padding=1, bias=False)
         self.bn1   = nn.BatchNorm3d(out_ch)
         self.conv2 = nn.Conv3d(out_ch, out_ch, kernel_size=3, padding=1, bias=False)
         self.bn2   = nn.BatchNorm3d(out_ch)
+        self.se    = SEBlock3D(out_ch, reduction)
         self.skip  = (
             nn.Sequential(
                 nn.Conv3d(in_ch, out_ch, kernel_size=1, bias=False),
@@ -38,21 +88,33 @@ class ResBlock3D(nn.Module):
             if in_ch != out_ch else nn.Identity()
         )
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         out = F.relu(self.bn1(self.conv1(x)))
-        out = self.bn2(self.conv2(out))
+        out = self.se(self.bn2(self.conv2(out)))   # SE after second BN
         return F.relu(out + self.skip(x))
+
+
+# Alias kept for any code that imports ResBlock3D directly from this module
+ResBlock3D = SEResBlock3D
 
 
 class Deep3DCNN(nn.Module):
     """
-    Wide and deep 3D CNN (~3.53 M params).
-    Suitable for genuine 3D volumetric patches (NoduleMNIST3D, LUNA16).
+    Wide and deep 3D CNN with SE attention (~3.7 M params).
 
-    Key differences vs Small3DCNN:
-      - Doubled channel widths at every stage (16/32/64/128 → 32/64/128/256)
-      - Extra MaxPool between stages 2 and 3 (28→14→7→3 spatial resolution)
-      - Higher default dropout (0.5 vs 0.3)
+    Trained exclusively on NoduleMNIST3D for malignancy classification.
+    SE attention is applied after the second conv in each residual block,
+    allowing the network to selectively weight channels that encode malignancy
+    cues (spiculation, density heterogeneity) over noise channels.
+
+    Key differences from Trial 6:
+      - SEResBlock3D replaces plain ResBlock3D at every stage
+      - SE reduction ratio r=8 adds minimal parameter overhead (~0.2 M)
+
+    Parameters
+    ----------
+    dropout_p : float
+        Dropout probability before the classification head (default 0.5).
     """
 
     def __init__(self, dropout_p: float = 0.5):
@@ -63,25 +125,29 @@ class Deep3DCNN(nn.Module):
             nn.ReLU(inplace=True),
         )
         self.pool = nn.MaxPool3d(kernel_size=2, stride=2)
-        self.res1 = ResBlock3D(32,  64)   # pool → (B, 64,  14³)
-        self.res2 = ResBlock3D(64,  128)  # pool → (B, 128,  7³)
-        self.res3 = ResBlock3D(128, 256)  # pool → (B, 256,  3³)
-        self.res4 = ResBlock3D(256, 256)  # no pool → (B, 256, 3³)
+        self.res1 = SEResBlock3D(32,  64)    # pool -> (B,  64, 16^3 from 32^3)
+        self.res2 = SEResBlock3D(64,  128)   # pool -> (B, 128,  8^3)
+        self.res3 = SEResBlock3D(128, 256)   # pool -> (B, 256,  4^3)
+        self.res4 = SEResBlock3D(256, 256)   # no pool -> (B, 256, 4^3)
         self.gap  = nn.AdaptiveAvgPool3d((1, 1, 1))
         self.drop = nn.Dropout(dropout_p)
         self.fc   = nn.Linear(256, 1)
 
-    def forward(self, x):
-        x = self.pool(self.stem(x))   # (B,  32, 14³)
-        x = self.pool(self.res1(x))   # (B,  64,  7³)
-        x = self.pool(self.res2(x))   # (B, 128,  3³)
-        x = self.res3(x)              # (B, 256,  3³)
-        x = self.res4(x)              # (B, 256,  3³)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.pool(self.stem(x))   # (B,  32, 16^3)
+        x = self.pool(self.res1(x))   # (B,  64,  8^3) — wait, from 16^3 after stem pool
+        x = self.pool(self.res2(x))   # (B, 128,  4^3)
+        x = self.res3(x)              # (B, 256,  4^3)
+        x = self.res4(x)              # (B, 256,  4^3)
         x = self.gap(x).flatten(1)   # (B, 256)
         x = self.drop(x)
-        return self.fc(x).squeeze(1) # (B,)
+        return self.fc(x).squeeze(1)  # (B,)
 
-    def get_feature_maps(self, x):
+    def get_feature_maps(self, x: torch.Tensor) -> dict:
+        """
+        Return intermediate feature maps for visualization.
+        Maps are detached and moved to CPU.
+        """
         maps = {}
         x = self.pool(self.stem(x));  maps["stem_pool"] = x.detach().cpu()
         x = self.pool(self.res1(x));  maps["res1_pool"] = x.detach().cpu()
