@@ -382,6 +382,8 @@ A wider and deeper residual network should extract richer volumetric features fr
 
 ### Model: Deep3DCNN
 
+**Motivation:** `Small3DCNN` (Trials 0–3) was intentionally kept lightweight for two reasons: (1) the IQ-OTH:NCCD and LungcancerDataSet inputs are pseudo-3D — the same 2D JPEG slice repeated 28 times along the depth axis — so deeper 3D convolutions extract no additional signal, and (2) a compact model (~884K params) can be exported and run on CPU-only hardware, making it practical for rural or resource-constrained clinic deployments where no dedicated GPU is available. With LUNA16 now added to training, the inputs are genuine 3D volumetric patches with real HU gradients along all three spatial axes. `Small3DCNN` is too shallow to learn the density, spiculation, and boundary features that distinguish malignant nodules in full CT volumes. `Deep3DCNN` addresses this by doubling channel widths at every stage and adding a third MaxPool, forcing the network to integrate volumetric context before the classifier head.
+
 `Deep3DCNN` replaces the `Small3DCNN` used in Trials 0–3. It is roughly 4× larger and designed to extract richer spatial hierarchies from 3D nodule volumes.
 
 | Component | Small3DCNN (Trials 0–3) | Deep3DCNN (Trial 4) |
@@ -630,6 +632,8 @@ The internal validation set (783 images) was carved with a stratified 15% split 
 
 ### Model 1: Deep3DCNN (NoduleMNIST3D + LUNA16)
 
+**Motivation:** NoduleMNIST3D and LUNA16 both contain genuine 3D volumetric CT patches — real density gradients along the depth axis. A deeper, wider model is warranted here to extract the volumetric features (spiculation, boundary sharpness, internal density variation) that distinguish malignant from benign nodules. This model targets the clinically important 3D CT screening pathway.
+
 ~7.07 M parameters (note: parameter count higher than expected due to an extra residual stage in the current implementation). Four residual stages with three MaxPools, reducing spatial resolution from 28³ to 3³.
 
 | Component | Architecture |
@@ -654,6 +658,8 @@ Training composition:
 ---
 
 ### Model 2: CXRClassifier (Chest X-ray)
+
+**Motivation:** IQ-OTH:NCCD and LungcancerDataSet are 2D JPEG images — CT slices or chest X-rays saved as display screenshots. There is no genuine volumetric information, so a 3D CNN is inappropriate. A 2D ResNet-18 with ImageNet pretrained weights is the natural fit: it leverages strong texture priors and requires far fewer training samples to converge. This model represents the low-cost, widely deployable end of the pipeline — chest X-rays are available in most clinics worldwide, making this model especially relevant for rural or resource-limited screening programs where CT scanners are not accessible.
 
 ~11.17 M parameters (ResNet-18 backbone ~11.17M + classification head 513). The backbone is frozen at ImageNet scale and fine-tuned with a low LR; only the final linear layer uses a higher LR.
 
@@ -1003,6 +1009,8 @@ The Trial 6 sampler (TARGET_CANCER_RATE=0.65) reduced AUROC from 0.926 to 0.886 
 
 ### Model 1: Deep3DCNN (SE attention + two-phase training, NoduleMNIST3D)
 
+**Motivation:** NoduleMNIST3D is the primary clinical benchmark: 28³ voxel patches sourced from the LIDC-IDRI CT collection, curated and balanced by MedMNIST. Performance on this dataset is the most meaningful proxy for real-world nodule malignancy screening because the labels reflect radiologist consensus (aggregated malignancy ratings ≥ 3 = malignant). The Deep3DCNN is the primary model for this task — it has sufficient capacity (~3.7M params with SE attention) to capture the subtle morphological features (spiculation, lobulation, density heterogeneity) that radiologists use to rate malignancy. SE (Squeeze-and-Excitation) attention is added from Trial 7 onward to let the network recalibrate which feature channels are most informative on a per-sample basis, which is valuable when the discriminative signal can come from density, shape, or boundary texture depending on the nodule. Two-phase training first pretrains on LUNA16 (large, well-labelled 3D CT data) to initialise weights with genuine volumetric priors, then fine-tunes on NoduleMNIST3D, reducing the effective sample-size limitation of the smaller benchmark.
+
 Architecture: Stem(32) -> SEResBlock(32,64)+Pool -> SEResBlock(64,128)+Pool -> SEResBlock(128,256)+Pool -> SEResBlock(256,256) -> GAP -> Dropout(0.5) -> FC(256->1). ~3.7M params.
 
 Phase 1 training: label-smoothed BCE + luna_pos_weight, AdamW (lr=3e-4, wd=1e-4), CosineAnnealingLR, LUNA16 train split, 20 epochs, gradient clipping (max_norm=1.0).
@@ -1011,11 +1019,15 @@ Phase 2 training: label-smoothed BCE + deep_pos_weight, AdamW (lr=1e-4, wd=1e-4)
 
 ### Model 2: LUNA3DCNN (new dedicated model, LUNA16)
 
+**Motivation:** LUNA16 provides full-resolution 3D CT scans from the LIDC-IDRI collection — the same source as NoduleMNIST3D, but at the original scan resolution rather than downsampled to 28³. The task here is nodule *presence* detection (nodule vs. non-nodule background tissue), which has a much cleaner decision boundary than malignancy grading: a genuine spherical nodule against uniform parenchyma is visually distinct, so deep SE channel attention adds complexity without benefit. A dedicated, simpler architecture (~2.0M params, standard ResBlocks, lower Dropout 0.3) is more appropriate than reusing the full Deep3DCNN. Separating this model from the NoduleMNIST3D model also eliminates the domain calibration conflict seen in Trial 4, where LUNA16's HU-normalised patches shifted the combined val threshold to 0.85 and degraded NoduleMNIST3D performance. Each model is now evaluated and threshold-tuned independently on its own validation split.
+
 Architecture: Stem(32) -> ResBlock(32,64)+Pool -> ResBlock(64,128)+Pool -> ResBlock(128,256)+Pool -> GAP -> Dropout(0.3) -> FC(256->1). ~2.0M params. File: `src/model3d_luna.py`.
 
 Training: standard BCE + luna_pos_weight, AdamW (lr=3e-4, wd=1e-4), CosineAnnealingLR, LUNA16 train split, up to 60 epochs, early stopping patience=10 on val AUROC.
 
 ### Model 3: CXRClassifier (natural distribution + temperature scaling)
+
+**Motivation:** IQ-OTH:NCCD and LungcancerDataSet consist of 2D JPEG images — axial CT or X-ray screenshots rather than volumetric scans. There is no genuine 3D spatial structure to exploit, so training a 3D CNN on these inputs is wasteful and risks overfitting to 2D texture patterns that differ across scanners and display presets. A 2D ResNet-18 backbone (~11.2M params) pretrained on ImageNet provides strong texture and shape priors that transfer well to medical images with minimal fine-tuning data. The model serves a complementary role in the screening pipeline: it operates on standard 2D chest radiographs, which are far more widely available than CT scans in rural or lower-resource settings. A patient can be flagged by the CXRClassifier from a single frontal X-ray and then referred for the more expensive CT-based workup evaluated by Deep3DCNN or LUNA3DCNN. Temperature scaling post-training ensures the output probabilities are well-calibrated, reducing the risk of extreme thresholds that can mask poor generalisation.
 
 Architecture: unchanged from Trial 6 (ResNet-18 backbone, ~11.2M params).
 
